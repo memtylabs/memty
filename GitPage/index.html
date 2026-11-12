@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Memty: your AI memory, owned by you</title>
-    <meta name="description" content="Memty keeps the facts you share with AI assistants in one private vault on your computer, and brings that memory to ChatGPT, Claude, Gemini, Perplexity, Cursor, and any MCP client. Local-first, no account, open source.">
+    <meta name="description" content="Memty keeps the facts you share with AI assistants in one private vault on your computer. One local daemon serves that memory to ChatGPT, Claude, Gemini, and Perplexity in the browser and to Cursor, Claude Code, Codex, and any MCP client on the desktop. In live tests it used 61% fewer input tokens than replaying full documents. Local-first, no account, open source.">
     <meta name="theme-color" content="#f7f6f2">
     <link rel="canonical" href="https://memtylabs.github.io/memty/">
     <link rel="icon" type="image/png" href="assets/memty-icon.png">
@@ -34,21 +34,23 @@
           <a class="nav-link active" href="#overview"><span>01</span>Overview</a>
           <a class="nav-link" href="#why"><span>02</span>Why Memty</a>
           <a class="nav-link" href="#how-it-works"><span>03</span>How it works</a>
-          <a class="nav-link" href="#get-started"><span>04</span>Get started</a>
-          <a class="nav-link" href="#extension"><span>05</span>Browser extension</a>
-          <a class="nav-link" href="#control"><span>06</span>Your control</a>
-          <a class="nav-link" href="#privacy"><span>07</span>Privacy &amp; security</a>
-          <a class="nav-link" href="#integrations"><span>08</span>Works with</a>
-          <a class="nav-link" href="#under-the-hood"><span>09</span>Under the hood</a>
-          <a class="nav-link" href="#commands"><span>10</span>Commands</a>
-          <a class="nav-link" href="#roadmap"><span>11</span>Progress &amp; roadmap</a>
-          <a class="nav-link" href="#faq"><span>12</span>FAQ</a>
+          <a class="nav-link" href="#proof"><span>04</span>Proof: tokens</a>
+          <a class="nav-link" href="#get-started"><span>05</span>Get started</a>
+          <a class="nav-link" href="#extension"><span>06</span>Browser extension</a>
+          <a class="nav-link" href="#integrations"><span>07</span>Desktop &amp; CLI agents</a>
+          <a class="nav-link" href="#trust"><span>08</span>Trust control plane</a>
+          <a class="nav-link" href="#control"><span>09</span>Your control</a>
+          <a class="nav-link" href="#privacy"><span>10</span>Privacy &amp; security</a>
+          <a class="nav-link" href="#under-the-hood"><span>11</span>Under the hood</a>
+          <a class="nav-link" href="#commands"><span>12</span>Commands</a>
+          <a class="nav-link" href="#roadmap"><span>13</span>Progress &amp; roadmap</a>
+          <a class="nav-link" href="#faq"><span>14</span>FAQ</a>
         </nav>
         <div class="side-cta">
           <a class="button button-primary button-small" href="#get-started">pip install memty</a>
         </div>
         <div class="sidebar-footer">
-          <p>v0.2.0 · MIT license</p>
+          <p>v0.2.0 on PyPI · MIT license</p>
           <p>Local SQLite · No account</p>
           <p><a href="https://github.com/memtylabs/memty" target="_blank" rel="noreferrer">GitHub ↗</a> · <a href="https://pypi.org/project/memty/" target="_blank" rel="noreferrer">PyPI ↗</a></p>
         </div>
@@ -60,7 +62,7 @@
           <div>
             <p class="eyebrow">Portable memory for every AI assistant</p>
             <h1>Your AI memory.<br><em>Owned by you.</em></h1>
-            <p class="lede">Memty keeps the facts, decisions, and preferences you share with AI in one private vault on your own computer. It brings that memory to ChatGPT, Claude, Gemini, Perplexity, Cursor, and any MCP client, so you stop repeating yourself in every new chat.</p>
+            <p class="lede">Memty keeps the facts, decisions, and preferences you share with AI in one private vault on your own computer. One local daemon serves that memory to ChatGPT, Claude, Gemini, and Perplexity in your browser, and to Cursor, Claude Code, Codex, and any MCP client on your desktop. Save a fact once, and stop repeating yourself in every new chat.</p>
             <div class="button-row">
               <a class="button button-primary" href="#get-started">Get started in 3 minutes →</a>
               <a class="button" href="#how-it-works">See how it works</a>
@@ -70,8 +72,15 @@
               <button class="copy-button" type="button" data-copy="pip install memty">Copy</button>
             </div>
             <div class="chips" aria-label="Key facts">
-              <span>Stored on your device</span><span>No account</span><span>No telemetry</span><span>You approve every fact</span><span>Open source · MIT</span>
+              <span>Stored on your device</span><span>One daemon, every assistant</span><span>No account</span><span>No telemetry</span><span>You approve every fact</span><span>Open source · MIT</span>
             </div>
+            <dl class="stats" aria-label="Measured results">
+              <div><dt>61%</dt><dd>fewer input tokens than replaying full documents, in live Claude + Gemini runs</dd></div>
+              <div><dt>30/30</dt><dd>exact answers, vs 27/30 for both baselines</dd></div>
+              <div><dt>0</dt><dd>LLM tokens to bootstrap a project or pick facts from a chat (no model by default)</dd></div>
+              <div><dt>~3 ms</dt><dd>to build a capsule from 300 facts, on your machine</dd></div>
+            </dl>
+            <p class="stats-note">One synthetic five-turn task, three runs. <a href="#proof">Method, raw results, and limits →</a></p>
           </div>
 
           <figure class="mock" aria-label="Example: saving a fact from a chat answer, then adding saved facts to a new chat">
@@ -127,24 +136,48 @@
           <div class="section-head">
             <p class="eyebrow">How it works</p>
             <h2>Save once. <em>Recall anywhere.</em></h2>
-            <p>Everything runs on your machine. Assistants reach the same vault through a small local bridge (for websites) or the Model Context Protocol (for desktop and coding tools).</p>
+            <p>Everything runs on your machine. Every assistant reaches the same vault through one local daemon: browser chats through a small local bridge, desktop and coding agents through the Model Context Protocol, and you through the terminal. Nothing is synced between apps. They all read the same file.</p>
           </div>
 
-          <div class="diagram" role="img" aria-label="Diagram: chat websites connect through the browser extension and local bridge; desktop and coding tools connect through MCP; both use one local daemon and one vault file.">
-            <div class="diagram-row two">
-              <div class="node"><span class="via">Chat websites</span><b>ChatGPT · Claude.ai · Gemini · Perplexity</b><small>Memty Bridge browser extension (Chrome, Edge, Brave)</small></div>
-              <div class="node"><span class="via">Desktop &amp; coding tools</span><b>Claude Desktop · Claude Code · Cursor · Windsurf</b><small>Any MCP client, over stdio</small></div>
+          <div class="diagram" role="img" aria-label="Diagram: chat websites connect through the browser extension and the local bridge on port 8765; desktop and coding agents connect through MCP over stdio; the terminal uses the CLI. All three go through one local daemon, memtyd, to one vault file.">
+            <div class="diagram-row three">
+              <div class="node"><span class="via">Chat websites</span><b>ChatGPT · Claude.ai · Gemini · Perplexity</b><small>Memty Bridge extension in Chrome, Edge, or Brave</small></div>
+              <div class="node"><span class="via">Desktop &amp; coding agents</span><b>Cursor · Claude Code · Codex · VS Code · Windsurf · Claude Desktop</b><small>Any MCP client</small></div>
+              <div class="node"><span class="via">Terminal</span><b>memty remember · recall · clip · scan · inbox · report</b><small>The <code>memty</code> CLI</small></div>
             </div>
-            <div class="diagram-row two" aria-hidden="true"><div class="arrow">↓</div><div class="arrow">↓</div></div>
-            <div class="diagram-row two">
-              <div class="node node-core"><b>memty serve</b><small>Local web bridge on 127.0.0.1:8765. Paired with your extension only.</small></div>
-              <div class="node node-core"><b>memty mcp</b><small>MCP server started by each client. Tool <code>memty_sync</code>.</small></div>
+            <div class="diagram-row three" aria-hidden="true"><div class="arrow">↓</div><div class="arrow">↓</div><div class="arrow">↓</div></div>
+            <div class="diagram-row three">
+              <div class="node node-core"><b>memty serve</b><small>Bridge on <code>127.0.0.1:8765</code>. Needs the pairing token and an approved extension. Starts at login.</small></div>
+              <div class="node node-core"><b>memty mcp</b><small>Started by each client over stdio, no port. Tools <code>memty_sync</code>, <code>memty_propose</code>, <code>memty_drill</code>.</small></div>
+              <div class="node node-core"><b>CLI</b><small>Talks to the daemon directly. Every command works on the same vault.</small></div>
             </div>
             <div class="arrow" aria-hidden="true">↓</div>
-            <div class="diagram-row"><div class="node node-core"><b>memtyd: one local daemon per vault</b><small>Shared by the bridge, the MCP servers, and the CLI. Serializes writes so every tool sees the same memory.</small></div></div>
+            <div class="diagram-row"><div class="node node-core node-daemon"><b>memtyd: one local daemon per vault</b><small>Started automatically by whichever tool needs it first. A lock file allows only one per vault. It listens on a random loopback port with a secret token, handles one request at a time so two tools can never overwrite each other, and runs the privacy gate on everything it hands out.</small></div></div>
             <div class="arrow" aria-hidden="true">↓</div>
-            <div class="diagram-row"><div class="node node-vault"><b>~/.memty/ledger.sqlite3: your vault</b><small>A single SQLite file on your disk. No cloud, no sync, no account.</small></div></div>
+            <div class="diagram-row"><div class="node node-vault"><b>~/.memty/ledger.sqlite3: your vault</b><small>One SQLite file on your disk: facts, rules, summaries, archived sources, version history, the proposal inbox, and receipts. No cloud, no sync, no account.</small></div></div>
           </div>
+
+          <p class="subhead">Connections and ports</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Piece</th><th>How it's reached</th><th>Who may connect</th></tr></thead>
+              <tbody>
+                <tr><td>memtyd</td><td><code>127.0.0.1</code>, random port, recorded with a secret token in <code>ledger.sqlite3.daemon.json</code></td><td>Local processes that can read that file. Every request carries the token, and only a fixed list of vault operations is accepted.</td></tr>
+                <tr><td>Browser bridge</td><td><code>127.0.0.1:8765</code> (change with <code>--port</code>)</td><td>Only extensions you paired. Web pages, other hosts, and other origins are refused.</td></tr>
+                <tr><td>MCP server</td><td>stdio, no network port</td><td>Only the app that started it, such as Cursor or Claude Code</td></tr>
+                <tr><td>CLI</td><td>Directly to memtyd</td><td>You, in your terminal</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="subhead">A fact's journey: from ChatGPT to Cursor</p>
+          <ol class="flow">
+            <li><span>01</span><b>Select</b><p>In ChatGPT you select "We deploy on Fly.io" and click <b>＋ Save to Memty</b>.</p></li>
+            <li><span>02</span><b>Propose</b><p>The bridge turns the selection into short facts on your computer, with no model call. You review and save.</p></li>
+            <li><span>03</span><b>Store</b><p>memtyd writes <code>deploy_target: Fly.io</code> into the <code>project.api</code> namespace as a confirmed fact.</p></li>
+            <li><span>04</span><b>Recall</b><p>In Cursor the agent calls <code>memty_sync</code> for <code>project.api</code>. memtyd builds a 120-token capsule and runs the privacy gate.</p></li>
+            <li><span>05</span><b>Receipt</b><p>Cursor gets <code>Deploy target: Fly.io</code>. A receipt records that one fact was served, without its value.</p></li>
+          </ol>
 
           <p class="subhead">Five ideas behind it</p>
           <ol class="flow">
@@ -152,12 +185,74 @@
             <li><span>02</span><b>Namespaces</b><p>Separate contexts such as <code>work.project</code> or <code>personal</code>. A chat only gets the namespace you choose.</p></li>
             <li><span>03</span><b>The compiler</b><p>Builds a small capsule per request: newest facts first, or the most relevant ones for a question, under a hard token budget.</p></li>
             <li><span>04</span><b>Privacy gate</b><p>Every capsule is checked: private values are masked, secrets stop the request, blocked providers get nothing.</p></li>
-            <li><span>05</span><b>You decide</b><p>Proposals need your approval. Your own facts can't be overwritten automatically. Deleted means deleted.</p></li>
+            <li><span>05</span><b>You decide</b><p>Proposals need your approval, from chats and from agents. Your own facts can't be overwritten automatically. Deleted means deleted.</p></li>
           </ol>
         </section>
 
-        <!-- 04 GET STARTED -->
-        <section class="section section-anchor" id="get-started">
+        <!-- 04 PROOF -->
+        <section class="section section-anchor" id="proof">
+          <div class="section-head">
+            <p class="eyebrow">Proof: tokens and accuracy</p>
+            <h2>Fewer tokens. <em>More exact answers.</em></h2>
+            <p>We passed one architecture handoff between Claude and Gemini over five turns, three ways: replaying the full documents, sending retrieved snippets, and sending a selected Memty context. Token counts are what the providers reported. Each run made real, billable API calls.</p>
+          </div>
+
+          <div class="grid grid-4 proof-stats">
+            <article class="card card-accent"><span class="num">VS FULL REPLAY</span><p class="big">61.1%</p><p>fewer input tokens: 5,448 vs 13,989 across three runs</p></article>
+            <article class="card card-accent"><span class="num">VS RETRIEVED SNIPPETS</span><p class="big">42.0%</p><p>fewer input tokens: 5,448 vs 9,386</p></article>
+            <article class="card card-accent"><span class="num">EXACT ANSWERS</span><p class="big">30/30</p><p>expected values returned exactly. Both baselines: 27/30.</p></article>
+            <article class="card card-accent"><span class="num">MEMORY PAYLOAD</span><p class="big">88%</p><p>smaller memory payload than the full documents (445 vs 3,710 estimated tokens, five turns)</p></article>
+          </div>
+
+          <div class="grid grid-2 spaced">
+            <figure class="chart">
+              <figcaption><b>Input tokens, three live runs combined</b><span>Claude Haiku 5.5 and Gemini 2.5 Flash alternating · lower is better</span></figcaption>
+              <div class="bars" role="img" aria-label="Input tokens across three runs: full document replay 13,989; simulated retrieval 9,386; selected Memty context 5,448.">
+                <div class="bar-row" tabindex="0" data-tip="Full replay: 13,989 input tokens, 27/30 exact"><span class="bar-label">Full document replay</span><span class="bar-track"><span class="bar" style="--w:100%"></span></span><span class="bar-value">13,989</span></div>
+                <div class="bar-row" tabindex="0" data-tip="Simulated retrieval: 9,386 input tokens, 27/30 exact"><span class="bar-label">Simulated retrieval</span><span class="bar-track"><span class="bar" style="--w:67.1%"></span></span><span class="bar-value">9,386</span></div>
+                <div class="bar-row is-memty" tabindex="0" data-tip="Memty: 5,448 input tokens, 30/30 exact"><span class="bar-label">Selected Memty context</span><span class="bar-track"><span class="bar" style="--w:38.9%"></span></span><span class="bar-value">5,448</span></div>
+              </div>
+            </figure>
+            <figure class="chart">
+              <figcaption><b>Memory supplied over five turns, offline</b><span>Memty's token estimator, same fixture · lower is better</span></figcaption>
+              <div class="bars" role="img" aria-label="Estimated memory tokens over five turns: full documents 3,710; curated snippets and tool definitions 1,620; selected Memty context 445.">
+                <div class="bar-row" tabindex="0" data-tip="Full documents: 3,710 tokens, 10/10 values present"><span class="bar-label">Full source documents</span><span class="bar-track"><span class="bar" style="--w:100%"></span></span><span class="bar-value">3,710</span></div>
+                <div class="bar-row" tabindex="0" data-tip="Snippets: 1,620 tokens, 10/10 values present"><span class="bar-label">Curated snippets + tools</span><span class="bar-track"><span class="bar" style="--w:43.7%"></span></span><span class="bar-value">1,620</span></div>
+                <div class="bar-row is-memty" tabindex="0" data-tip="Memty: 445 tokens, 10/10 values present"><span class="bar-label">Selected Memty context</span><span class="bar-track"><span class="bar" style="--w:12%"></span></span><span class="bar-value">445</span></div>
+              </div>
+            </figure>
+          </div>
+
+          <p class="subhead">Every run, as the providers reported it</p>
+          <div class="table-wrap">
+            <table class="num-table">
+              <thead><tr><th>Run</th><th>Context supplied</th><th>Input tokens</th><th>Output tokens</th><th>Exact answers</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>Full document replay</td><td>4,663</td><td>309</td><td>9/10</td></tr>
+                <tr><td>1</td><td>Simulated retrieval</td><td>3,148</td><td>463</td><td>9/10</td></tr>
+                <tr class="is-memty"><td>1</td><td>Selected Memty context</td><td>1,816</td><td>204</td><td>10/10</td></tr>
+                <tr><td>2</td><td>Full document replay</td><td>4,663</td><td>308</td><td>9/10</td></tr>
+                <tr><td>2</td><td>Simulated retrieval</td><td>3,090</td><td>477</td><td>9/10</td></tr>
+                <tr class="is-memty"><td>2</td><td>Selected Memty context</td><td>1,816</td><td>204</td><td>10/10</td></tr>
+                <tr><td>3</td><td>Full document replay</td><td>4,663</td><td>281</td><td>9/10</td></tr>
+                <tr><td>3</td><td>Simulated retrieval</td><td>3,148</td><td>363</td><td>9/10</td></tr>
+                <tr class="is-memty"><td>3</td><td>Selected Memty context</td><td>1,816</td><td>204</td><td>10/10</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="subhead">Getting facts in costs nothing</p>
+          <div class="grid grid-3">
+            <article class="card"><span class="num">PROJECT SCAN</span><h3>0 LLM tokens, ~7 ms</h3><p><code>memty scan</code> read this repository's manifests and saved 21 baseline facts in a median of 7.4 ms, with no model call.</p></article>
+            <article class="card"><span class="num">CHAT EXTRACTION</span><h3>0 LLM tokens by default</h3><p>Facts are picked from a selection with fixed local rules. An optional local Ollama model never leaves your machine.</p></article>
+            <article class="card"><span class="num">CAPSULE BUILD</span><h3>~3 ms for 300 facts</h3><p>Ranking, the privacy gate, and packing to the token budget run locally, in a median of 3.0 ms.</p></article>
+          </div>
+
+          <div class="note note-amber"><b>What this does and doesn't show.</b> All runs use one synthetic five-turn fixture with ten facts, prepared by hand and loaded into Memty. The retrieval baseline is curated snippets and illustrative tool definitions in the prompt, not a real RAG or MCP product. The live runs don't count the cost of creating the facts, and three repeats on one task don't prove general performance. The offline table checks that the right values were <i>supplied</i>, not that a model used them. The prompts, per-turn answers, raw usage, and the code to reproduce everything are public: <a href="https://github.com/memtylabs/memty/tree/main/benchmarks/token_burn" target="_blank" rel="noreferrer">benchmarks/token_burn ↗</a>.</div>
+        </section>
+
+        <!-- 05 GET STARTED -->
+        <section class="section section-alt section-anchor" id="get-started">
           <div class="section-head">
             <p class="eyebrow">Get started</p>
             <h2>Three commands. <em>One time.</em></h2>
@@ -189,12 +284,13 @@
               <p>Open <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b>, and pick the folder that opened. It pairs itself, with no token to copy.</p>
             </div>
           </div>
-          <div class="note note-green"><b>Using Claude Desktop, Claude Code, Cursor, or Windsurf?</b> Also run <code>memty connect</code>. It connects each detected client through the client's own official installer, then restart the client.</div>
+          <div class="note note-green"><b>Using Cursor, Claude Code, Codex, VS Code, Windsurf, or Claude Desktop?</b> Also run <code>memty connect</code>. It connects each detected client through the client's own official installer. Then restart the client.</div>
+          <div class="note note-green"><b>Working in a code project?</b> Run <code>memty init</code> (or <code>memty scan</code>) once in its folder. Memty reads your manifests and saves 10 to 20 baseline facts about the stack, with zero tokens, so your agents start with context instead of an empty vault.</div>
           <div class="note"><b>Prefer the terminal?</b> <code>memty remember work.project editor "VS Code"</code> saves a fact, and <code>memty clip work.project</code> copies your facts for any AI app.</div>
         </section>
 
-        <!-- 05 EXTENSION -->
-        <section class="section section-alt section-anchor" id="extension">
+        <!-- 06 EXTENSION -->
+        <section class="section section-anchor" id="extension">
           <div class="section-head">
             <p class="eyebrow">Browser extension · Memty Bridge</p>
             <h2>Memory inside the chats <em>you already use.</em></h2>
@@ -237,8 +333,105 @@ Client: [private]</pre>
           <div class="note note-amber"><b>No AI model is used by default.</b> Extraction runs on fixed rules, so it's instant, free, private, and predictable. It reads the shape of text (bullets, <code>Key: value</code> lines, short sentences), not its meaning, which is why every proposal goes through your review. For smarter extraction, set <code>MEMTY_OLLAMA_MODEL</code> (for example <code>llama3.1</code>) to use a local Ollama model. It still runs on your machine, and Memty falls back to the rules if Ollama doesn't answer.</div>
         </section>
 
-        <!-- 06 CONTROL -->
-        <section class="section section-anchor" id="control">
+        <!-- 07 INTEGRATIONS -->
+        <section class="section section-alt section-anchor" id="integrations">
+          <div class="section-head">
+            <p class="eyebrow">Desktop &amp; CLI agents</p>
+            <h2>Your coding agents <em>share one memory.</em></h2>
+            <p>Cursor, Claude Code, Codex, VS Code, Windsurf, and Claude Desktop reach the vault over the Model Context Protocol. The clipboard and Python cover everything else. The same vault powers every route; use one or all of them.</p>
+          </div>
+
+          <p class="subhead first">MCP clients: one command</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Client</th><th>How <code>memty connect</code> connects it</th></tr></thead>
+              <tbody>
+                <tr><td>Claude Code</td><td>Runs Claude Code's official <code>claude mcp add --scope user memty</code>, so Claude Code validates and saves its own settings.</td></tr>
+                <tr><td>Cursor</td><td>Opens Cursor's official MCP install link, and Cursor asks you to confirm.</td></tr>
+                <tr><td>Codex CLI</td><td>Runs Codex's own <code>codex mcp add memty</code> installer.</td></tr>
+                <tr><td>VS Code</td><td>Runs <code>code --add-mcp</code> with a stdio server definition. You confirm in VS Code.</td></tr>
+                <tr><td>Claude Desktop</td><td>Prints the exact entry and where to add it (Settings › Developer › Edit Config).</td></tr>
+                <tr><td>Windsurf</td><td>Prints the exact entry for Windsurf's MCP settings.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note note-green"><b>Memty never edits another app's settings file.</b> A bad write can stop an app from starting, so every change goes through the app's own installer or through you. Every client starts its own small MCP server, and all of them share the same memtyd and the same vault: a fact saved in Codex is in Cursor's next recall.</div>
+
+          <p class="subhead">What agents can do</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tool</th><th>What it does</th><th>Guardrail</th></tr></thead>
+              <tbody>
+                <tr><td><code>memty_sync</code></td><td>Recall a namespace's capsule. When you ask, save up to 25 facts in one call and get the updated capsule back.</td><td>120-token capsule, checked by the privacy gate. MCP clients are treated as cloud providers by default.</td></tr>
+                <tr><td><code>memty_propose</code></td><td>Suggest a fact the agent learned on its own, from code, config, or what you said.</td><td>New facts are saved as unconfirmed. A change to an existing fact waits in your inbox until you approve it.</td></tr>
+                <tr><td><code>memty_drill</code></td><td>Read the archived source text behind a fact.</td><td>Only for a genuinely local model, and at most 4,000 characters.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid grid-2 spaced">
+            <div class="code-card">
+              <div class="code-head"><span>Clipboard · any AI app</span><button class="copy-button" type="button" data-copy="memty clip work.project">Copy</button></div>
+              <pre><code>memty clip work.project                  <span class="c"># copy your facts</span>
+memty clip work.project --query <span class="s">"deploy"</span> <span class="c"># most relevant first</span>
+memty clip work.project --print          <span class="c"># print instead</span>
+memty clip work.project --format xml     <span class="c"># for agents and tools</span></code></pre>
+              <p class="code-note">Treated as a cloud destination: private values are masked, and secrets stop the copy. Tip: bind it to a keyboard shortcut.</p>
+            </div>
+            <div class="code-card">
+              <div class="code-head"><span>Python</span><button class="copy-button" type="button" data-copy="from memty import open_ledger&#10;&#10;vault = open_ledger()&#10;vault.record(&quot;work.project&quot;, &quot;editor&quot;, &quot;VS Code&quot;, verification_state=&quot;USER_CONFIRMED&quot;)&#10;capsule = vault.context(&quot;Which editor do I use?&quot;, provider=&quot;claude&quot;)&#10;print(capsule[&quot;text&quot;])">Copy</button></div>
+              <pre><code><span class="k">from</span> memty <span class="k">import</span> open_ledger
+
+vault = open_ledger()   <span class="c"># ~/.memty/ledger.sqlite3</span>
+vault.record(<span class="s">"work.project"</span>, <span class="s">"editor"</span>, <span class="s">"VS Code"</span>,
+             verification_state=<span class="s">"USER_CONFIRMED"</span>)
+capsule = vault.context(<span class="s">"Which editor do I use?"</span>, provider=<span class="s">"claude"</span>)
+print(capsule[<span class="s">"text"</span>])   <span class="c"># bounded &lt;memty_state&gt; block</span></code></pre>
+              <p class="code-note">Also: <code>vault.forget()</code>, <code>vault.rehydrate()</code> to restore masked values locally, and <code>vault.drill_down()</code> for archived source text.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 08 TRUST -->
+        <section class="section section-anchor" id="trust">
+          <div class="section-head">
+            <p class="eyebrow">Trust control plane</p>
+            <h2>No black box. <em>No silent overwrites.</em></h2>
+            <p>Memory you can't inspect is memory you can't trust. Memty fills itself without a model, lets agents suggest instead of overwrite, and keeps a receipt every time it hands memory to an assistant.</p>
+          </div>
+          <div class="grid grid-3">
+            <article class="card card-accent"><span class="num">MEMTY SCAN · MEMTY INIT</span><h3>Starts full, not empty</h3><p>Reads <code>pyproject.toml</code>, <code>package.json</code>, <code>Cargo.toml</code>, <code>Dockerfile</code>, and <code>.env.example</code> and saves your stack as facts in milliseconds, with no model and no network. From env templates it keeps key names only; a real <code>.env</code> is never opened. Facts you confirmed or deleted are never touched.</p></article>
+            <article class="card card-accent"><span class="num">MEMTY INBOX</span><h3>Agents propose, you decide</h3><p>When Cursor or Claude Code learns something, a brand-new fact is saved as unconfirmed. A change to a fact you already have waits in your inbox: <code>memty approve</code> or <code>memty reject</code>. Approving never lowers a fact's privacy level.</p></article>
+            <article class="card card-accent"><span class="num">MEMTY REPORT</span><h3>A receipt for every capsule</h3><p>Recall, clip, MCP, and the browser each log what they served: which client, how many facts and tokens, how many values were masked, and any request a secret blocked. Slot names only, never values.</p></article>
+          </div>
+
+          <div class="grid spaced">
+            <div class="code-card">
+              <div class="code-head"><span>Inbox · example</span><button class="copy-button" type="button" data-copy="memty inbox">Copy</button></div>
+              <pre><code>$ memty inbox
+[1] project.api -> cache_engine: <span class="s">"Redis"</span> [confirmed] => <span class="s">"DragonflyDB"</span> (Proposed by Cursor)
+      why: compose.yaml runs dragonfly
+
+$ memty approve 1
+[1] approved: project.api.cache_engine = <span class="s">"DragonflyDB"</span> (user-confirmed, v2)</code></pre>
+              <p class="code-note">The old value stays in <code>memty history</code>. <code>memty reject 1</code> leaves the fact untouched.</p>
+            </div>
+            <div class="code-card">
+              <div class="code-head"><span>Report · example</span><button class="copy-button" type="button" data-copy="memty report">Copy</button></div>
+              <pre><code>$ memty report
+42 capsules served across Claude, Cursor &amp; Perplexity | 114 verified facts reused
+| ~91,000 tokens saved | 4 SECRET slots protected
+
+  By channel        web 24, mcp 15, recall 3
+  Privacy           6 confidential value(s) redacted, 2 request(s) blocked by a SECRET slot
+  Most reused       project.api.database x31, project.api.framework x27</code></pre>
+              <p class="code-note">Illustrative numbers. "Tokens saved" is a conservative local estimate, compared with sending the whole namespace and its sources, and the report says so.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 09 CONTROL -->
+        <section class="section section-alt section-anchor" id="control">
           <div class="section-head">
             <p class="eyebrow">Your facts, your control</p>
             <h2>See it. Fix it. <em>Delete it for good.</em></h2>
@@ -258,6 +451,8 @@ Client: [private]</pre>
               <thead><tr><th>What</th><th>Where</th><th>Notes</th></tr></thead>
               <tbody>
                 <tr><td>Your facts</td><td><code>~/.memty/ledger.sqlite3</code></td><td>One SQLite file on your disk. On Windows: <code>C:\Users\&lt;you&gt;\.memty</code>. Change it with <code>--db</code> or <code>MEMTY_VAULT_PATH</code>.</td></tr>
+                <tr><td>Inbox and receipts</td><td>Inside the same file</td><td>Agent proposals waiting for you, and one receipt per capsule served (counts and slot names, never values).</td></tr>
+                <tr><td>Daemon</td><td><code>ledger.sqlite3.daemon.json</code>, <code>.daemon.lock</code></td><td>The running memtyd's loopback port and secret token, and the lock that allows only one daemon per vault.</td></tr>
                 <tr><td>Pairing</td><td><code>ledger.sqlite3.web-token</code>, <code>.web-paired.json</code></td><td>The extension's token (owner-only) and which extensions may connect.</td></tr>
                 <tr><td>Extension files</td><td><code>~/.memty/browser-extension</code></td><td>Installed by <code>memty extension</code>.</td></tr>
                 <tr><td>Browser storage</td><td>Extension settings only</td><td>Port, token, chosen namespace, and pill position. No facts are stored in the browser.</td></tr>
@@ -267,8 +462,8 @@ Client: [private]</pre>
           </div>
         </section>
 
-        <!-- 07 PRIVACY -->
-        <section class="section section-alt section-anchor" id="privacy">
+        <!-- 10 PRIVACY -->
+        <section class="section section-anchor" id="privacy">
           <div class="section-head">
             <p class="eyebrow">Privacy &amp; security</p>
             <h2>Built so websites <em>can't read your vault.</em></h2>
@@ -306,52 +501,7 @@ Client: [private]</pre>
           </div>
         </section>
 
-        <!-- 08 INTEGRATIONS -->
-        <section class="section section-anchor" id="integrations">
-          <div class="section-head">
-            <p class="eyebrow">Works with</p>
-            <h2>Web, desktop, terminal, <em>and code.</em></h2>
-            <p>The same vault powers every route. Use one or all of them.</p>
-          </div>
-
-          <p class="subhead first">MCP clients: one command</p>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Client</th><th>How <code>memty connect</code> connects it</th></tr></thead>
-              <tbody>
-                <tr><td>Claude Code</td><td>Runs Claude Code's official <code>claude mcp add --scope user memty</code>, so Claude Code validates and saves its own settings.</td></tr>
-                <tr><td>Cursor</td><td>Opens Cursor's official MCP install link, and Cursor asks you to confirm.</td></tr>
-                <tr><td>Claude Desktop</td><td>Prints the exact entry and where to add it (Settings › Developer › Edit Config).</td></tr>
-                <tr><td>Windsurf</td><td>Prints the exact entry for Windsurf's MCP settings.</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="note note-green"><b>Memty never edits another app's settings file.</b> A bad write can stop an app from starting, so every change goes through the app's own installer or through you. Clients get the tool <code>memty_sync</code> (recall, remember, forget) and the resource <code>memty://capsule/{namespace}</code>, capped at 120 tokens and checked by the privacy gate.</div>
-
-          <div class="grid grid-2 spaced">
-            <div class="code-card">
-              <div class="code-head"><span>Clipboard · any AI app</span><button class="copy-button" type="button" data-copy="memty clip work.project">Copy</button></div>
-              <pre><code>memty clip work.project                  <span class="c"># copy your facts</span>
-memty clip work.project --query <span class="s">"deploy"</span> <span class="c"># most relevant first</span>
-memty clip work.project --print          <span class="c"># print instead</span>
-memty clip work.project --format xml     <span class="c"># for agents and tools</span></code></pre>
-              <p class="code-note">Treated as a cloud destination: private values are masked, and secrets stop the copy. Tip: bind it to a keyboard shortcut.</p>
-            </div>
-            <div class="code-card">
-              <div class="code-head"><span>Python</span><button class="copy-button" type="button" data-copy="from memty import open_ledger&#10;&#10;vault = open_ledger()&#10;vault.record(&quot;work.project&quot;, &quot;editor&quot;, &quot;VS Code&quot;, verification_state=&quot;USER_CONFIRMED&quot;)&#10;capsule = vault.context(&quot;Which editor do I use?&quot;, provider=&quot;claude&quot;)&#10;print(capsule[&quot;text&quot;])">Copy</button></div>
-              <pre><code><span class="k">from</span> memty <span class="k">import</span> open_ledger
-
-vault = open_ledger()   <span class="c"># ~/.memty/ledger.sqlite3</span>
-vault.record(<span class="s">"work.project"</span>, <span class="s">"editor"</span>, <span class="s">"VS Code"</span>,
-             verification_state=<span class="s">"USER_CONFIRMED"</span>)
-capsule = vault.context(<span class="s">"Which editor do I use?"</span>, provider=<span class="s">"claude"</span>)
-print(capsule[<span class="s">"text"</span>])   <span class="c"># bounded &lt;memty_state&gt; block</span></code></pre>
-              <p class="code-note">Also: <code>vault.forget()</code>, <code>vault.rehydrate()</code> to restore masked values locally, and <code>vault.drill_down()</code> for archived source text.</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- 09 UNDER THE HOOD -->
+        <!-- 11 UNDER THE HOOD -->
         <section class="section section-alt section-anchor" id="under-the-hood">
           <div class="section-head">
             <p class="eyebrow">Under the hood</p>
@@ -366,6 +516,9 @@ print(capsule[<span class="s">"text"</span>])   <span class="c"># bounded &lt;me
                 <tr><td>Facts stay small</td><td>Values over 40 tokens are rejected, so each fact is one clear statement.</td></tr>
                 <tr><td>Deleting is permanent</td><td>Forgetting a fact tombstones it and purges its value and history.</td></tr>
                 <tr><td>Automation can't overrule you</td><td>Automatically extracted facts can't overwrite facts you confirmed, and can't restore facts you deleted.</td></tr>
+                <tr><td>Agents ask first</td><td>An agent's change to an existing fact goes to the inbox, never straight into the vault. Approving keeps the fact's privacy level and provider rules.</td></tr>
+                <tr><td>One writer</td><td>All tools go through one memtyd per vault, which handles one request at a time, so concurrent tools can't corrupt or overwrite each other.</td></tr>
+                <tr><td>Every capsule is accounted for</td><td>Each capsule served, and each request a secret blocked, writes a receipt with counts and slot names. Values are never written to receipts.</td></tr>
                 <tr><td>Bounded context</td><td>Every capsule is checked against a hard token limit: 350 for chat websites, 200 for the clipboard by default, 120 for MCP, and 600 for the API by default.</td></tr>
                 <tr><td>Newest first</td><td>Without a question, the most recently saved facts lead. With a question, facts are ranked by keyword overlap and optional semantic similarity.</td></tr>
                 <tr><td>Raw text stays out</td><td>Source text archived with a fact is never put in a capsule. It's only returned by an explicit drill-down call.</td></tr>
@@ -387,12 +540,13 @@ print(capsule[<span class="s">"text"</span>])   <span class="c"># bounded &lt;me
                 <tr><td>Sensitivity</td><td><code>PUBLIC</code>, <code>INTERNAL</code>, <code>CONFIDENTIAL</code>, <code>SECRET</code></td><td>Who may see it (see Privacy)</td></tr>
                 <tr><td>Providers</td><td>allowed / blocked lists</td><td>Per-fact allow and block lists, e.g. never send to one provider</td></tr>
                 <tr><td>Version</td><td><code>3</code></td><td>How many times it has changed; older values are in the history</td></tr>
+                <tr><td>Hit count</td><td><code>27</code></td><td>How many capsules have included it, from the receipts</td></tr>
               </tbody>
             </table>
           </div>
         </section>
 
-        <!-- 10 COMMANDS -->
+        <!-- 12 COMMANDS -->
         <section class="section section-anchor" id="commands">
           <div class="section-head">
             <p class="eyebrow">Commands</p>
@@ -406,7 +560,11 @@ print(capsule[<span class="s">"text"</span>])   <span class="c"># bounded &lt;me
                 <tr><td><code>memty serve --autostart</code></td><td>Start the browser bridge now and at every login. <code>--no-autostart</code> undoes it, <code>--stop</code> stops it.</td></tr>
                 <tr><td><code>memty extension</code></td><td>Install or update the browser extension folder. Add <code>--open</code> to open it.</td></tr>
                 <tr><td><code>memty pair</code></td><td>Let one more browser (or a reinstalled extension) connect within two minutes.</td></tr>
-                <tr><td><code>memty connect</code></td><td>Connect Claude Desktop, Claude Code, Cursor, and Windsurf. <code>--dry-run</code> shows the plan.</td></tr>
+                <tr><td><code>memty connect</code></td><td>Connect Cursor, Claude Code, Codex CLI, VS Code, Windsurf, and Claude Desktop. <code>--dry-run</code> shows the plan.</td></tr>
+                <tr><td><code>memty init</code> · <code>memty scan</code></td><td>Save a code project's baseline facts from its manifests, with zero tokens. <code>--dry-run</code> previews them.</td></tr>
+                <tr><td><code>memty inbox</code></td><td>Review facts your agents proposed. <code>--all</code> includes resolved ones.</td></tr>
+                <tr><td><code>memty approve ID</code> · <code>memty reject ID</code></td><td>Accept a proposal as a confirmed fact, or discard it. <code>--all</code> for every pending one.</td></tr>
+                <tr><td><code>memty receipts</code> · <code>memty report</code></td><td>See each capsule served, or a summary: capsules, facts reused, estimated tokens saved, secrets protected. <code>--days 7</code> limits the period.</td></tr>
                 <tr><td><code>memty remember NS SLOT VALUE</code></td><td>Save a fact, e.g. <code>memty remember work.project editor "VS Code"</code>.</td></tr>
                 <tr><td><code>memty recall "question"</code></td><td>Print the capsule for a question. Add <code>--namespace</code> and <code>--provider</code>.</td></tr>
                 <tr><td><code>memty clip NS</code></td><td>Copy a namespace's facts to the clipboard for any AI app.</td></tr>
@@ -434,7 +592,7 @@ print(capsule[<span class="s">"text"</span>])   <span class="c"># bounded &lt;me
           </div>
         </section>
 
-        <!-- 11 ROADMAP -->
+        <!-- 13 ROADMAP -->
         <section class="section section-alt section-anchor" id="roadmap">
           <div class="section-head">
             <p class="eyebrow">Progress &amp; roadmap</p>
@@ -467,23 +625,39 @@ print(capsule[<span class="s">"text"</span>])   <span class="c"># bounded &lt;me
               </div>
             </article>
             <article class="milestone">
+              <div class="milestone-meta"><span class="tag tag-done">Week 4 · Shipped</span><small>Nov 9, 2026 · on main</small></div>
+              <div>
+                <h3>Every agent, one memory, measured</h3>
+                <p>More desktop clients on the same vault, and the first public token benchmark.</p>
+                <ul><li><code>memty connect</code> for Codex CLI and VS Code, alongside Claude, Cursor, and Windsurf</li><li><code>memty_sync</code> saves up to 25 facts in one call; <code>memty_drill</code> for local models</li><li>Each browser save becomes its own context you can pick before pasting</li><li>Token benchmark: 61% fewer input tokens than full replay and 30/30 exact answers in live Claude and Gemini runs</li></ul>
+              </div>
+            </article>
+            <article class="milestone">
+              <div class="milestone-meta"><span class="tag tag-done">Week 5 · Shipped</span><small>Nov 12, 2026 · on main</small></div>
+              <div>
+                <h3>The trust control plane</h3>
+                <p>Memty stops being a black box: it fills itself without a model, agents propose instead of overwrite, and every capsule leaves a receipt.</p>
+                <ul><li><code>memty scan</code> / <code>memty init</code>: zero-token project bootstrap that never stores secret values</li><li><code>memty_propose</code> and the <code>memty inbox</code>, <code>approve</code>, <code>reject</code> review queue</li><li>Context receipts, per-fact hit counts, <code>memty receipts</code> and <code>memty report</code></li><li>A cleaner package: vault, context and privacy gate, extraction, trust, runtime, integrations</li><li>Focused on memory: the separate model-routing SDK was removed</li></ul>
+              </div>
+            </article>
+            <article class="milestone">
               <div class="milestone-meta"><span class="tag tag-next">Next</span></div>
               <div>
-                <h3>Easier install for everyone</h3>
-                <p>A Chrome Web Store listing, so the extension installs in one click without Developer mode.</p>
+                <h3>Release and easier install</h3>
+                <p>Publish weeks 4 and 5 to PyPI, and list the extension on the Chrome Web Store so it installs in one click, without Developer mode.</p>
               </div>
             </article>
             <article class="milestone">
               <div class="milestone-meta"><span class="tag tag-later">Planned</span></div>
               <div>
-                <h3>Reproducible benchmarks</h3>
-                <p>A public task set measuring recall accuracy, context tokens, and cost, with prompts, raw results, and the method published. No benchmark or cost-savings figure is claimed until then.</p>
+                <h3>Broader benchmarks</h3>
+                <p>More tasks and repeats, comparisons with named RAG and MCP memory products using real tool calls, and the cost of creating memory counted, not just of reusing it.</p>
               </div>
             </article>
           </div>
         </section>
 
-        <!-- 12 FAQ -->
+        <!-- 14 FAQ -->
         <section class="section section-anchor" id="faq">
           <div class="section-head">
             <p class="eyebrow">FAQ</p>
@@ -491,15 +665,18 @@ print(capsule[<span class="s">"text"</span>])   <span class="c"># bounded &lt;me
           </div>
           <div class="faq">
             <details><summary>Is my data stored in the cloud?</summary><div><p>No. Your facts live in one file on your computer, <code>~/.memty/ledger.sqlite3</code>. Memty has no servers, accounts, sync, or telemetry, and the browser only keeps settings, never facts.</p><p>The one moment facts leave your computer is when you press Send in a chat: the block in your message goes to that AI company, like anything you type.</p></div></details>
+            <details><summary>Does Memty really use fewer tokens?</summary><div><p>In our published benchmark, yes: across three live runs passing one architecture handoff between Claude and Gemini, Memty's selected context used 5,448 input tokens versus 13,989 for replaying the full documents (61% less) and 9,386 for retrieved snippets (42% less), and it returned all 30 expected values exactly.</p><p>That's one synthetic task, not a guarantee for every workload, and it doesn't count the effort of creating the facts. The prompts, raw results, and code are public so you can rerun it. See <a href="#proof">Proof</a>.</p></div></details>
+            <details><summary>How do the browser and my coding agents share memory?</summary><div><p>They all talk to the same local daemon, memtyd, which owns your vault file. The browser extension reaches it through the bridge on <code>127.0.0.1:8765</code>; Cursor, Claude Code, Codex, and other MCP clients reach it through their own MCP server; the CLI reaches it directly. Nothing is copied between apps, so a fact saved in ChatGPT is in Cursor's next recall.</p></div></details>
+            <details><summary>Can my coding agent change my facts?</summary><div><p>Not on its own. An agent can add a brand-new fact, saved as unconfirmed. Any change to a fact you already have waits in <code>memty inbox</code> until you run <code>memty approve</code>. Facts you confirmed or deleted can't be changed by automation.</p></div></details>
             <details><summary>Does Memty use AI to pick facts from my chats?</summary><div><p>Not by default. It uses fixed rules: it reads bullets, <code>Key: value</code> lines, and short sentences, and skips questions, headings, and code. That makes it instant, free, and private. Because rules don't understand meaning, every proposal goes to you for review first.</p><p>Set <code>MEMTY_OLLAMA_MODEL</code> to use a local Ollama model instead. It still never leaves your machine.</p></div></details>
             <details><summary>Why didn't my newest fact show up?</summary><div><p>Since 0.2.0, facts are listed newest first, so a fact you just saved always leads. Check that it was saved to the namespace you're using (shown in the save message and on the facts page).</p></div></details>
-            <details><summary>What does "This browser isn't connected to Memty yet" mean?</summary><div><p>For your safety, Memty only talks to extensions you approved. A reinstalled extension or a second browser counts as new. Run <code>memty pair</code> in a terminal, then click <b>Try again</b>.</p></div></details>
+            <details><summary>What does "This browser isn't connected to Memty yet" mean?</summary><div><p>For your safety, Memty only talks to extensions you approved. A reinstalled extension or a second browser counts as new. Run <code>memty pair</code> in a terminal, then click <b>Try again</b>.</p><p>If <code>memty pair</code> says <b>Cannot pair</b>, another Memty bridge, for a different vault or an older version, is using port 8765. Stop it, then pair again.</p></div></details>
             <details><summary>Which browsers and sites are supported?</summary><div><p>Chrome, Edge, and Brave, on ChatGPT (chatgpt.com and chat.openai.com), Claude.ai, Gemini, and Perplexity. Chat sites change often, so if the pill can't find an answer, select the text you want instead.</p></div></details>
             <details><summary>Does it work offline?</summary><div><p>Yes. Saving, editing, and building capsules all run locally. You only need the internet for the AI chat itself.</p></div></details>
             <details><summary>What happens when I delete a fact?</summary><div><p>Its value and whole history are removed from the vault, and automatic saving can't bring it back. You can only restore it by adding it again yourself.</p></div></details>
             <details><summary>Can I keep secrets in Memty?</summary><div><p>Mark them <b>Private</b> to have chat AIs see only <code>[private]</code>, or <code>SECRET</code> so any request that would include them is refused. The vault file itself isn't encrypted, so it relies on your computer account's protection.</p></div></details>
             <details><summary>Is the web workspace connected to the vault?</summary><div><p>Not yet. The Memty web app is a separate companion; its account conversations and MongoDB memory don't sync with the local SQLite vault.</p></div></details>
-            <details><summary>How do I update or uninstall?</summary><div><p>Update: <code>pip install -U memty</code>, then <code>memty extension</code> and click reload on the extension. Open chat tabs update by themselves.</p><p>Uninstall: <code>memty serve --no-autostart</code>, <code>pip uninstall memty</code>, and remove the extension. Your vault stays in <code>~/.memty</code> until you delete it.</p></div></details>
+            <details><summary>How do I update or uninstall?</summary><div><p>Update: <code>pip install -U memty</code>, then <code>memtyd stop</code> so the daemon restarts on the new version, then <code>memty extension</code> and click reload on the extension. Open chat tabs update by themselves. Restart your MCP clients to pick up new agent tools.</p><p>Uninstall: <code>memty serve --no-autostart</code>, <code>pip uninstall memty</code>, and remove the extension. Your vault stays in <code>~/.memty</code> until you delete it.</p></div></details>
             <details><summary>What does it cost?</summary><div><p>Nothing. Memty is open source under the MIT license.</p></div></details>
           </div>
         </section>
