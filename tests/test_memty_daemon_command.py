@@ -14,8 +14,8 @@ import unittest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from memty.daemon import status, stop
-from memty.web_bridge import health, stop_background, token_path
+from memty.runtime.daemon import status, stop
+from memty.integrations.browser.bridge import health, stop_background, token_path
 
 
 class DaemonCommandTests(unittest.TestCase):

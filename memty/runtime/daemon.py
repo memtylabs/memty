@@ -14,13 +14,14 @@ import sys
 import tempfile
 import time
 
-from .compiler import LocalRoutingRequired
-from .factory import default_user_id, default_vault_path
-from .ledger import LockedSlot, MemtyLedger, TombstonedSlot
+from ..context.privacy import LocalRoutingRequired
+from ..vault.paths import default_user_id, default_vault_path
+from ..vault.ledger import LockedSlot, MemtyLedger, TombstonedSlot
 
 METHODS = frozenset({"record", "record_context", "find", "forget", "context", "context_selected", "stats", "list", "set_summary", "summary",
                      "summarize_namespace", "set_constraint", "list_constraints", "delete_constraint",
-                     "archive_raw", "drill_down", "history"})
+                     "archive_raw", "drill_down", "history", "propose", "proposals",
+                     "resolve_proposal", "log_receipt", "receipts", "report"})
 MAX_MESSAGE = 16 * 1024 * 1024
 _children = []
 
@@ -105,7 +106,7 @@ def ensure_daemon(db):
         if time.monotonic() >= next_start:
             _children[:] = [child for child in _children if child.poll() is None]
             _children.append(subprocess.Popen(
-                [sys.executable, "-m", "memty.daemon", "serve", "--db", str(path)],
+                [sys.executable, "-m", "memty.runtime.daemon", "serve", "--db", str(path)],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 creationflags=flags, start_new_session=(os.name != "nt"), close_fds=True))
             next_start = time.monotonic() + 1.0
@@ -125,9 +126,16 @@ class DaemonLedger:
             raise AttributeError(name)
         def invoke(*args, **kwargs):
             endpoint = ensure_daemon(self.path)
-            return _exchange(endpoint, {"method": name, "user": self.user_id,
-                                        "trusted": self.trusted_providers,
-                                        "args": args, "kwargs": kwargs})
+            try:
+                return _exchange(endpoint, {"method": name, "user": self.user_id,
+                                            "trusted": self.trusted_providers,
+                                            "args": args, "kwargs": kwargs})
+            except ValueError as error:
+                if str(error) == "unknown daemon method":
+                    # memtyd outlives `pip install --upgrade`; an old process lacks new methods.
+                    raise RuntimeError("The running memtyd is older than this memty. "
+                                       "Run `memtyd stop` and try again.") from error
+                raise
         return invoke
 
     def close(self):
@@ -253,7 +261,7 @@ def main():
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
     if args.action == "bridge":
-        from .web_bridge import start_background
+        from ..integrations.browser.bridge import start_background
         ensure_daemon(args.db)
         bridge = start_background(args.db, args.user, port=args.port)
         print(json.dumps({"daemon": status(args.db), "bridge": bridge,

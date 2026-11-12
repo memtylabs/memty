@@ -189,7 +189,7 @@ def main() -> None:
     allow_remote = os.getenv("MEMTY_VAULT_ALLOW_REMOTE", os.getenv("NEXOR_VAULT_ALLOW_REMOTE", "false"))
     if host not in {"127.0.0.1", "localhost", "::1"} and allow_remote.casefold() != "true":
         raise RuntimeError("Non-loopback binding requires MEMTY_VAULT_ALLOW_REMOTE=true and a strong API token.")
-    uvicorn.run("memty.api:app", host=host, port=int(os.getenv("MEMTY_VAULT_API_PORT", os.getenv("NEXOR_VAULT_API_PORT", "8765"))),
+    uvicorn.run("memty.legacy.api:app", host=host, port=int(os.getenv("MEMTY_VAULT_API_PORT", os.getenv("NEXOR_VAULT_API_PORT", "8765"))),
                 log_level="warning")
 
 

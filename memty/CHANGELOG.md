@@ -4,6 +4,25 @@ All notable changes to the `memty` package. This project follows [Semantic Versi
 
 ## Unreleased
 
+- **Memty is a memory layer, not a model router.** Removed:
+  - the model-routing SDK and multi-provider chat client: `memty models`, `route`, `chat`, `integration`, `router-mcp`, the `memty-router-mcp` script, and `load_client`, `Memty`, the provider adapters and `SmartRouter` from `from memty import ...`
+  - the `nexorai` alias package
+  - the routing modules in `memoryport` (`sdk`, `sdk_cli`, `sdk_mcp`, `router`, `embeddings`)
+
+  `memty init` no longer writes `~/.memty/models.json`. It now bootstraps the current project, the same as `memty scan`. `import memty` no longer loads `memoryport`. The older temporal vault (`memty-api`, `memty vault`, `memty vault-mcp`) stays for the `memory-vault` Docker service.
+
+- **Package reorganized into folders by job:** `vault/`, `context/`, `extraction/`, `trust/`, `runtime/`, `integrations/` (`mcp/`, `browser/`), `routing/` and `legacy/`. See "Code layout" in the README.
+  - The privacy gate now has its own module, `context/privacy.py`.
+  - Commands, console scripts and the public `from memty import ...` API are unchanged.
+  - Breaking for deep imports: module paths changed. For example, `memty.ledger` is now `memty.vault.ledger`, `memty.daemon` is now `memty.runtime.daemon`, and `memty.web_bridge` is now `memty.integrations.browser.bridge`. The bundled extension moved to `memty/integrations/browser/extension/`.
+  - After upgrading, run `memtyd stop` once so the daemon restarts from its new module path.
+
+- **Trust control plane.**
+  - `memty scan` (alias `memty init`) bootstraps project facts from `pyproject.toml`, `package.json`, `Cargo.toml`, `Dockerfile` and `.env.example` without a model. Env templates contribute key names only. Facts are saved as `EXTRACTED`, so confirmed and deleted slots are never touched.
+  - The new MCP tool `memty_propose` saves new agent-learned facts as `EXTRACTED`. Changes to existing facts are queued for `memty inbox`, `memty approve` and `memty reject`.
+  - Context receipts: recall, clip, MCP and browser capsules record counts and slot names, never values, and increment per-fact `hit_count`. `memty receipts` lists them and `memty report` summarizes capsules served, verified facts reused, an estimate of tokens saved, and SECRET slots protected.
+  - Ledger schema v2 adds the `fact_proposals`, `fact_usage` and `context_receipts` tables. Existing vaults are upgraded in place.
+
 - `memty daemon` starts the shared vault daemon and local browser bridge together, checking that an existing bridge uses the same vault and user.
 - Browser reviews suggest namespaces found in the selection and allow choosing or creating a project before saving; fact titles prefer acronyms and identifiers.
 - Added a reproducible synthetic token payload benchmark and an optional live provider measurement runner.

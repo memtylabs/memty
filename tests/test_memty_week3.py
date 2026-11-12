@@ -12,10 +12,10 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
-from memty.extract import extract_facts, extract_heuristic
-from memty.ledger import MemtyLedger
-from memty.tokens import estimate_tokens
-from memty.web_bridge import (BridgeServer, load_or_create_token, open_pairing, paired_origins,
+from memty.extraction.atomic_facts import extract_facts, extract_heuristic
+from memty.vault.ledger import MemtyLedger
+from memty.vault.tokens import estimate_tokens
+from memty.integrations.browser.bridge import (BridgeServer, load_or_create_token, open_pairing, paired_origins,
                                token_path)
 
 EXT = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
@@ -185,7 +185,7 @@ Requests must not be sent to the cloud unless the user explicitly approves them.
             def __exit__(self, *exc): return False
         value = " ".join(["preserve"] * 55) + " and never send secrets"
         with patch.dict(os.environ, {"MEMTY_OLLAMA_MODEL": "local"}), \
-             patch("memty.extract.urlrequest.urlopen", return_value=Reply()):
+             patch("memty.extraction.atomic_facts.urlrequest.urlopen", return_value=Reply()):
             result = extract_facts("A long decision.")
         self.assertEqual(" ".join(f["value"] for f in result["facts"]), value)
         self.assertTrue(any("split" in warning for warning in result["warnings"]))
@@ -199,12 +199,12 @@ Requests must not be sent to the cloud unless the user explicitly approves them.
         payload = json.dumps({"response": json.dumps({"facts": [
             {"slot": "Main Language", "value": "Python"}, {"slot": "x", "value": ""}]})}).encode()
         with patch.dict(os.environ, {"MEMTY_OLLAMA_MODEL": "llama3"}), \
-             patch("memty.extract.urlrequest.urlopen", return_value=Reply(payload)) as call:
+             patch("memty.extraction.atomic_facts.urlrequest.urlopen", return_value=Reply(payload)) as call:
             result = extract_facts("We write everything in Python.")
         self.assertEqual(result, {"facts": [{"slot": "main_language", "value": "Python"}], "method": "ollama"})
         self.assertTrue(call.call_args[0][0].full_url.startswith("http://127.0.0.1:11434/"))
         with patch.dict(os.environ, {"MEMTY_OLLAMA_MODEL": "llama3"}), \
-             patch("memty.extract.urlrequest.urlopen", side_effect=OSError("refused")):
+             patch("memty.extraction.atomic_facts.urlrequest.urlopen", side_effect=OSError("refused")):
             self.assertEqual(extract_facts("- Editor: VS Code")["method"], "heuristic")
 
 
@@ -266,7 +266,7 @@ class BridgeTests(unittest.TestCase):
         self.assertNotEqual(load_or_create_token(self.ledger.path, rotate=True), self.token)
 
     def test_start_rejects_a_bridge_for_a_different_vault_or_user(self):
-        from memty.web_bridge import start_background
+        from memty.integrations.browser.bridge import start_background
         same = start_background(self.ledger.path, "local", port=self.port)
         self.assertTrue(same["already_running"])
         with self.assertRaisesRegex(RuntimeError, "different or older"):
@@ -656,7 +656,7 @@ class ClipTests(unittest.TestCase):
                               capture_output=True, text=True, encoding="utf-8", timeout=30)
 
     def test_clip_print_and_privacy(self):
-        from memty.daemon import stop
+        from memty.runtime.daemon import stop
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "ledger.sqlite3"
             try:
@@ -679,14 +679,14 @@ class ClipTests(unittest.TestCase):
                 stop(db)
 
     def test_autostart_command_runs_the_bridge(self):
-        from memty import autostart
+        from memty.runtime import autostart
         args = autostart.command("~/vault.sqlite3", "local", 8765)
         self.assertEqual(args[1:3], ["-m", "memty"])
         self.assertEqual(args[-4:], ["local", "serve", "--port", "8765"])
         self.assertTrue(Path(args[4]).is_absolute())
 
     def test_extension_installs_from_the_package_and_never_clobbers_other_folders(self):
-        from memty import extension
+        from memty.integrations.browser import installer as extension
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "ext"
             result = extension.install(target)
@@ -705,15 +705,15 @@ class ClipTests(unittest.TestCase):
             self.assertEqual((other / "notes.txt").read_text(encoding="utf-8"), "keep")
 
     def test_copy_text_uses_platform_tool(self):
-        from memty import clipboard
-        with patch("memty.clipboard.subprocess.run") as run:
+        from memty.integrations import clipboard
+        with patch("memty.integrations.clipboard.subprocess.run") as run:
             clipboard.copy_text("capsule ✓")
         argv, kwargs = run.call_args[0][0], run.call_args[1]
         if sys.platform == "win32":
             self.assertEqual(argv, ["clip"])
             self.assertEqual(kwargs["input"], "capsule ✓".encode("utf-16"))
         self.assertTrue(kwargs["check"])
-        with patch("memty.clipboard._command", return_value=None):
+        with patch("memty.integrations.clipboard._command", return_value=None):
             with self.assertRaises(RuntimeError):
                 clipboard.copy_text("x")
 

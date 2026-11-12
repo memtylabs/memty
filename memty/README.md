@@ -38,6 +38,29 @@ memty extension           # 2. install the browser extension folder and show whe
 memty connect             # 3. optional: connect Claude Desktop, Claude Code, Cursor, Windsurf
 ```
 
+### Windows: `memty` is not recognized
+
+This usually means the Python Scripts folder is not on your PATH, or Memty was
+installed into a different Python environment. In Command Prompt or PowerShell,
+install and run it with the same Python interpreter:
+
+```shell
+py -m pip install --upgrade memty
+py -m memty
+```
+
+You can use `py -m memty` in place of `memty` for every command, for example
+`py -m memty extension`. If `py` is unavailable, use `python -m pip install --upgrade memty`
+and `python -m memty` instead. If you installed Memty in a virtual environment,
+activate that same environment first in each new terminal.
+
+To make the shorter `memty` command work without an activated environment, add
+the Scripts folder reported in the pip installation warning to your Windows
+user PATH, then open a new terminal. If there was no warning, use
+`py -m pip show -f memty` to locate `memty.exe` under the installation's Scripts
+folder. If `py -m memty` says there is no module named `memty`, install it using
+the same `py` or `python` command you use to run it.
+
 Then load the extension once. Open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, click **Load unpacked**, and choose the folder that `memty extension` printed. There's no token to copy and nothing to configure: the extension pairs itself with Memty on your computer.
 
 In any chat on ChatGPT, Claude.ai, Gemini, or Perplexity:
@@ -197,9 +220,10 @@ memty connect --client Cursor      # only one client (repeatable)
 | Claude Desktop | Prints the exact entry and steps (Settings > Developer > Edit Config) |
 | Windsurf | Prints the exact entry and steps for Windsurf's MCP settings |
 
-Restart each client after connecting it. Every MCP process talks to the same `memtyd` for the configured vault. For example, saving `project.api.editor = VS Code` in Codex makes it available to Cursor's next `memty_sync(namespace="project.api")` call. The server exposes two tools:
+Restart each client after connecting it. Every MCP process talks to the same `memtyd` for the configured vault. For example, saving `project.api.editor = VS Code` in Codex makes it available to Cursor's next `memty_sync(namespace="project.api")` call. The server exposes three tools:
 
 - `memty_sync(namespace, query, set_slots)` recalls a 120-token capsule. On an explicit user request, `set_slots` saves up to 25 confirmed slot/value pairs and returns the updated capsule in the same call. The older `action=remember|forget` form remains available for single-slot changes.
+- `memty_propose(namespace, slot, value, reason)` is for facts an agent learns on its own. A new slot is saved as `EXTRACTED`. A change to an existing or deleted slot is never written directly: it waits in `memty inbox` until you approve it (see [Trust control plane](#trust-control-plane-scan-inbox-receipts)). The reply never echoes the value already saved.
 - `memty_drill(namespace, slot)` returns at most 4,000 characters of archived source, only when `MEMTY_PROVIDER` names a genuinely local model. It never runs for the default cloud-provider identity.
 
 The resource template `memty://capsule/{namespace}` is also available. **MCP clients do not automatically read a resource merely because it is registered**; ask the assistant to call `memty_sync` for the relevant namespace. If you want this every chat, put a concise instruction in the client's own agent settings. The client and model still decide when to call tools.
@@ -207,6 +231,64 @@ The resource template `memty://capsule/{namespace}` is also available. **MCP cli
 MCP capsules are limited to 120 tokens, and MCP clients are treated as cloud providers by default, so the privacy gate applies. Set `MEMTY_PROVIDER` to a local identity only when the model really runs locally. Tool schemas and returned capsules still use tokens; no fixed percentage saving is guaranteed.
 
 Note: Memty 0.1.0 and 0.1.1 could write client settings files directly. If a client broke after one of those versions ran, use that client's recovery steps. Don't delete its whole configuration file.
+
+---
+
+## Trust control plane: scan, inbox, receipts
+
+### Bootstrap a project without a model: `memty scan`
+
+```shell
+cd ~/code/billing-api
+memty scan                 # or: memty scan PATH --namespace project.billing --dry-run
+```
+
+```
+Scanned 4 file(s) in 3.1 ms (0 LLM tokens): pyproject.toml, package.json, Dockerfile, .env.example
+project.billing-api: 14 saved, 0 updated, 0 unchanged
+  + python_package = billing-api 1.4.2
+  + python_frameworks = FastAPI, SQLAlchemy
+  + env_keys = STRIPE_SECRET_KEY, DATABASE_URL, REDIS_URL
+  ...
+```
+
+The scan reads `pyproject.toml`, `package.json`, `Cargo.toml`, `Dockerfile` and `.env.example` (or `.env.sample` / `.env.template`) at the project root. It makes no model or network calls. It typically saves 10 to 20 facts to `project.<folder>`: name and version, runtime, frameworks, dependencies, scripts, package manager, test framework, base images, exposed ports, environment key names, and license.
+
+- **No secret values.** Env templates contribute key names only, and a real `.env` is never opened. From a Dockerfile only `FROM`, `EXPOSE` and `WORKDIR` are read; `ENV`, `ARG`, `RUN` and `CMD` are ignored.
+- **Your edits win.** Facts are saved as `EXTRACTED`, so a scan never overwrites a value you confirmed and never recreates a slot you deleted. Running the scan again updates only the values that changed. It lists facts that are no longer in the project but doesn't delete them.
+- `memty init` is the same command: run it once in a project folder to bootstrap that project's memory.
+
+### Agent proposal inbox: `memty inbox`, `memty approve`, `memty reject`
+
+When Cursor, Claude Code, or another MCP client learns something, it calls `memty_propose`. A conflicting change never overwrites your memory. It is queued for your review:
+
+```shell
+memty inbox
+# [1] project.api -> cache_engine: "Redis" [confirmed] => "DragonflyDB" (Proposed by Cursor)
+#       why: docker-compose runs dragonfly
+memty approve 1            # saved as USER_CONFIRMED; the old value stays in `memty history`
+memty reject 1             # discarded; the saved fact is untouched
+memty approve --all        # or several ids: memty approve 1 2 3
+memty inbox --all          # include approved, rejected and superseded proposals
+```
+
+Approving a value keeps the slot's existing sensitivity and provider rules. A newer proposal for the same slot supersedes the older one. `memty forget` also removes any proposals for that slot.
+
+### Context receipts: `memty receipts`, `memty report`
+
+Each time `memty recall`, `memty clip`, MCP, or the browser bridge serves a capsule, Memty writes a receipt and increments a `hit_count` on each injected fact. The same happens when a SECRET slot blocks a request. A receipt holds the channel, the client, token counts, the number of redacted values, and slot **names**. It never stores values.
+
+```shell
+memty report
+# 42 capsules served across Claude, Cursor & Perplexity | 114 verified facts reused | ~91,000 tokens saved | 4 SECRET slots protected
+memty report --days 7 --json
+memty receipts --limit 20
+memty list --namespace project.api      # each fact now shows its hit_count
+```
+
+"Tokens saved" is a conservative local estimate. It compares each capsule with the token count of the full namespaces it drew from plus their archived raw sources, at about 4 characters per token. It is not a provider bill. The report prints this caveat. MCP receipts use the client name reported by the MCP client, while privacy decisions still use `MEMTY_PROVIDER`.
+
+After upgrading, run `memtyd stop` once so the background daemon reloads with the new commands.
 
 ---
 
@@ -224,6 +306,11 @@ memty rules --namespace repo.memty
 memty rule-delete repo.memty database_queries
 memty stats
 memty migrate ~/.memty/memory.sqlite3        # import from an earlier Memty vault
+memty scan [PATH] [--dry-run]                # bootstrap project facts from manifests, 0 tokens
+memty inbox                                  # agent proposals waiting for review
+memty approve 1 / memty reject 1             # resolve a proposal (--all for every one)
+memty receipts --limit 20                    # recent capsules served (no values)
+memty report [--days 7] [--json]             # capsules, reuse, tokens saved, secrets protected
 memty --version
 ```
 
@@ -301,6 +388,43 @@ vault.drill_down(fact_id=fact["id"])
 | Search works everywhere | FTS5 when SQLite supports it, with a SQL fallback otherwise |
 
 ---
+
+## Code layout
+
+Each folder in the package has one job. Start with the folder for the behavior you want to change:
+
+```
+memty/
+├── cli.py                  every `memty <command>`: parses arguments and calls the folders below
+├── vault/                  STORAGE: where facts live
+│   ├── ledger.py           the SQLite vault: facts, rules, summaries, raw archive, audit, inbox, receipts
+│   ├── paths.py            default vault path (~/.memty/ledger.sqlite3) and open_ledger()
+│   ├── migrate.py          import from older vaults
+│   └── tokens.py, vectors.py   token estimates and embedding packing
+├── context/                CAPSULES: what an assistant gets to see
+│   ├── privacy.py          the privacy gate: SECRET stays local, CONFIDENTIAL is redacted, allow/block lists
+│   ├── compiler.py         ranks facts for a query and packs them into the token budget
+│   └── render.py           plain "Title: value" capsules for chat apps
+├── extraction/             FACTS IN: without a cloud model
+│   ├── atomic_facts.py     splits selected text into short slot/value facts (heuristics or local Ollama)
+│   └── project_scan.py     `memty scan`: project facts from manifests, zero tokens
+├── trust/                  TRUST CONTROL PLANE
+│   ├── receipts.py         logs every capsule served (counts and slot names only)
+│   └── render.py           prints `memty inbox`, `memty receipts`, `memty report`
+├── runtime/                BACKGROUND PROCESSES
+│   ├── daemon.py           memtyd: the one process per vault that every call goes through
+│   └── autostart.py        start the browser bridge at login
+├── integrations/           HOW ASSISTANTS CONNECT
+│   ├── mcp/server.py       MCP tools memty_sync, memty_propose, memty_drill
+│   ├── mcp/connect.py      `memty connect` for Claude Code, Cursor, Codex, VS Code, Windsurf
+│   ├── browser/bridge.py   127.0.0.1 HTTP bridge for the browser extension
+│   ├── browser/installer.py  `memty extension`
+│   ├── browser/extension/  the extension itself (JavaScript, shipped in the wheel)
+│   └── clipboard.py        `memty clip`
+└── legacy/                 the older temporal vault (memoryport): `memty-api` for the memory-vault service, `memty vault`, `memty vault-mcp`
+```
+
+A request flows **integration → runtime/daemon → vault/ledger → context/compiler (through context/privacy) → integration**, and the integration writes a **trust/receipts** entry. Import public names from `memty` (for example `from memty import open_ledger, MemtyLedger, LocalRoutingRequired`). The submodule paths above are internal and may change.
 
 ## Uninstall
 

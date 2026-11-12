@@ -1,44 +1,25 @@
-"""Deterministic <600-token context compiler with a hard privacy gate."""
+"""Deterministic <600-token context compiler.
+
+Ranks a namespace's facts for a query and packs them into a ``<memty_state>``
+block within the token budget.  Every fact passes through the privacy gate in
+:mod:`memty.context.privacy` first.
+"""
 
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 from typing import TYPE_CHECKING, Any
 from xml.sax.saxutils import escape
 
-from .ledger import (LOCAL_PROVIDERS, _CONTEXT_SLOT_SUFFIX, _PROVIDER, _normalize_namespace, _terms)
-from .tokens import estimate_tokens, truncate_tokens
-from .vectors import cosine, unpack_vector
+from ..vault.ledger import _PROVIDER, _normalize_namespace, _terms
+from ..vault.tokens import estimate_tokens, truncate_tokens
+from ..vault.vectors import cosine, unpack_vector
+from .privacy import LocalRoutingRequired, needs_redaction, provider_allowed, provider_flags
+from .render import slot_label
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only for type checkers
-    from .ledger import MemtyLedger
-
-
-class LocalRoutingRequired(RuntimeError):
-    """A matched SECRET fact may not leave the device.
-
-    The caller (router/SDK) should switch to the suggested local provider and
-    compile the context again.  No secret value is included on the exception.
-    """
-
-    def __init__(self, provider: str, *, namespace: str | None = None,
-                 slot: str | None = None, suggested_provider: str = "ollama"):
-        self.provider = provider
-        self.namespace = namespace
-        self.slot = slot
-        self.suggested_provider = suggested_provider
-        target = f"{namespace}.{slot}" if namespace and slot else "a secret slot"
-        super().__init__(
-            f"SECRET memory matched {target}; provider '{provider}' is not local. "
-            f"Route this request to '{suggested_provider}'."
-        )
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"error": "local_routing_required", "provider": self.provider,
-                "suggested_provider": self.suggested_provider,
-                "namespace": self.namespace, "slot": self.slot}
+    from ..vault.ledger import MemtyLedger
 
 
 class ContextCompiler:
@@ -68,9 +49,7 @@ class ContextCompiler:
         query = "" if query is None else str(query).strip()
         namespace = _normalize_namespace(namespace) if namespace else None
 
-        provider_key = provider.casefold()
-        local = provider_key in LOCAL_PROVIDERS
-        trusted = local or provider_key in self.ledger.trusted_providers
+        provider_key, local, trusted = provider_flags(provider, self.ledger.trusted_providers)
         query_terms = _terms(query)
         scores = {str(key): float(value) for key, value in (semantic_scores or {}).items()}
 
@@ -79,7 +58,7 @@ class ContextCompiler:
             ranked: list[tuple[float, dict[str, Any], sqlite3.Row]] = []
             for row in rows:
                 fact = self.ledger._fact(row, include_embedding=False)
-                if (strict_namespace and fact["namespace"] != namespace) or fact["tombstone"] or not self._provider_allowed(fact, provider_key, trusted):
+                if (strict_namespace and fact["namespace"] != namespace) or fact["tombstone"] or not provider_allowed(fact, provider_key, trusted):
                     continue
                 overlap = (len(query_terms & _terms(
                     f"{fact['namespace']} {fact['slot']} {fact['value']}")) / len(query_terms)
@@ -143,9 +122,7 @@ class ContextCompiler:
                 or any(not isinstance(item, str) for item in fact_ids)
                 or len(set(fact_ids)) != len(fact_ids)):
             raise ValueError("a context must contain 1-25 distinct fact IDs")
-        provider_key = provider.casefold()
-        local = provider_key in LOCAL_PROVIDERS
-        trusted = local or provider_key in self.ledger.trusted_providers
+        provider_key, local, trusted = provider_flags(provider, self.ledger.trusted_providers)
         placeholders = ",".join("?" for _ in fact_ids)
         with self.ledger._connect() as db:
             rows = db.execute(
@@ -157,15 +134,15 @@ class ContextCompiler:
         allowed = []
         for fact_id in fact_ids:
             fact = by_id[fact_id]
-            if not self._provider_allowed(fact, provider_key, trusted):
+            if not provider_allowed(fact, provider_key, trusted):
                 continue
             if fact["sensitivity"] == "SECRET" and not local:
                 raise LocalRoutingRequired(provider, namespace=namespace, slot=fact["slot"])
-            fact_trusted = trusted or provider_key in {item.casefold() for item in fact["allowed_providers"]}
-            private = fact["ephemeral_redaction"] or (fact["sensitivity"] == "CONFIDENTIAL" and not fact_trusted)
-            allowed.append((fact, "[private]" if private else fact["value"], bool(private)))
+            private = needs_redaction(fact, provider_key, trusted)
+            allowed.append((fact, "[private]" if private else fact["value"], private))
         header, footer = "[Memty context]", "[/Memty]"
         lines: list[str] = []
+        included: list[str] = []
         redacted = 0
         for fact, value, private in allowed:
             line = f"{len(lines) + 1}. {slot_label(fact['slot'])}: {' '.join(value.split())}"
@@ -173,24 +150,14 @@ class ContextCompiler:
             if estimate_tokens(candidate) > token_budget:
                 break
             lines.append(line)
+            included.append(fact["id"])
             redacted += int(private)
         text = "\n".join([header, *lines, footer]) if lines else ""
         return {"text": text, "approx_tokens": estimate_tokens(text), "facts": len(lines),
-                "omitted": len(fact_ids) - len(lines), "redacted": redacted}
+                "omitted": len(fact_ids) - len(lines), "redacted": redacted,
+                "fact_ids": included}
 
     # ------------------------------------------------------------------
-    @staticmethod
-    def _provider_allowed(fact: dict[str, Any], provider_key: str, trusted: bool) -> bool:
-        blocked = {item.casefold() for item in fact["blocked_providers"]}
-        if provider_key in blocked:
-            return False
-        allowed = {item.casefold() for item in fact["allowed_providers"]}
-        if allowed and provider_key not in allowed:
-            return False
-        if fact["sensitivity"] == "INTERNAL" and not trusted and provider_key not in allowed:
-            return False
-        return True
-
     def _select_summary(self, db: sqlite3.Connection, query_terms: set[str],
                         namespace: str | None, query_embedding: list[float] | None,
                         provider_key: str, trusted: bool) -> dict[str, Any] | None:
@@ -236,11 +203,8 @@ class ContextCompiler:
         used: set[str] = set()
         counter = 0
 
-        def needs_redaction(fact: dict[str, Any]) -> bool:
-            allowed = {item.casefold() for item in fact["allowed_providers"]}
-            fact_trusted = local or trusted or provider_key in allowed
-            return bool(fact["ephemeral_redaction"]) or (
-                fact["sensitivity"] == "CONFIDENTIAL" and not fact_trusted)
+        def redact(fact: dict[str, Any]) -> bool:
+            return needs_redaction(fact, provider_key, local or trusted)
 
         def placeholder_for(fact: dict[str, Any]) -> str:
             nonlocal counter
@@ -258,7 +222,7 @@ class ContextCompiler:
         def probe_line(fact: dict[str, Any]) -> str:
             # Use a placeholder-shaped value while checking the budget so we do
             # not create a redaction mapping for a fact that never gets injected.
-            value = "<MEMTY_REDACTED_SLOT_99>" if needs_redaction(fact) else fact["value"]
+            value = "<MEMTY_REDACTED_SLOT_99>" if redact(fact) else fact["value"]
             return line_for(fact, value)
 
         def citation(fact: dict[str, Any], section: str) -> dict[str, Any]:
@@ -315,7 +279,7 @@ class ContextCompiler:
                 continue
             if not fits(extra_slot=cost + 1):
                 continue
-            value = placeholder_for(fact) if needs_redaction(fact) else fact["value"]
+            value = placeholder_for(fact) if redact(fact) else fact["value"]
             slots.append(line_for(fact, value))
             used.add(fact["id"])
             slot_used += cost
@@ -337,7 +301,7 @@ class ContextCompiler:
                 continue
             if not fits(extra_semantic=cost + 1):
                 continue
-            value = placeholder_for(fact) if needs_redaction(fact) else fact["value"]
+            value = placeholder_for(fact) if redact(fact) else fact["value"]
             semantic_lines.append(line_for(fact, value))
             used.add(fact["id"])
             semantic_used += cost
@@ -386,56 +350,3 @@ class ContextCompiler:
                 "eligible_count": eligible_count, "injected_count": 0,
                 "sections": {"slots": 0, "summary": 0, "semantic": 0},
                 "requires_local": False}
-
-
-# ---------------------------------------------------------------------------
-# Plain-text capsule for chat assistants pasted into by hand (web bridge, clip).
-# Chat UIs read plain "Title: value" lines far better than namespaced XML slots.
-_REDACTED = re.compile(r"<MEMTY_REDACTED_SLOT_\d+>")
-_HASH_SLOT = re.compile(r"^(?:note|fact)_[0-9a-f]{6,}$")
-_COUNTER = re.compile(r"_\d+$")
-
-
-def slot_label(slot: str) -> str:
-    """``deploy_target_2`` -> ``Deploy target``; hashed note slots become ``Note``."""
-    slot = _CONTEXT_SLOT_SUFFIX.sub("", slot)
-    if _HASH_SLOT.match(slot):
-        return "Note"
-    label = _COUNTER.sub("", slot).replace("_", " ").replace(".", " ").strip()
-    return label[:1].upper() + label[1:]
-
-
-def render_plain(result: dict[str, Any], namespace: str | None = None,
-                 token_budget: int | None = None) -> str:
-    """Render a compiled capsule as ``Title: value`` lines, trimmed to ``token_budget``.
-
-    Citations arrive best-first, so trimming drops the least relevant facts.
-    """
-    return render_plain_with_count(result, token_budget)[0]
-
-
-def render_plain_with_count(result: dict[str, Any], token_budget: int | None = None) -> tuple[str, int]:
-    """Render a capsule and count facts that fit, including grouped fact parts."""
-    citations = list(result.get("citations") or [])
-    text = _render_plain(citations)
-    while token_budget and citations and estimate_tokens(text) > token_budget:
-        citations.pop()
-        text = _render_plain(citations)
-    return text, sum(1 for item in citations if item.get("type") != "summary")
-
-
-def _render_plain(citations: list[dict[str, Any]]) -> str:
-    lines: list[str] = []
-    grouped: dict[str, list[str]] = {}
-    for item in citations:
-        if item.get("type") == "summary":
-            lines.append("Summary: " + " ".join(str(item["value"]).split()))
-            continue
-        value = _REDACTED.sub("[private]", " ".join(str(item.get("value", "")).split()))
-        grouped.setdefault(slot_label(str(item.get("slot", ""))), []).append(value)
-    for label, values in grouped.items():
-        if label == "Note":
-            lines.extend(f"Note: {value}" for value in values)
-        else:
-            lines.append(f"{label}: {'; '.join(values)}")
-    return "\n".join(lines)

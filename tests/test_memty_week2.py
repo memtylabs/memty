@@ -10,9 +10,9 @@ import unittest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from memty.connect import connect_clients
-from memty.ledger import MemtyLedger
-from memty.tokens import estimate_tokens
+from memty.integrations.mcp.connect import connect_clients
+from memty.vault.ledger import MemtyLedger
+from memty.vault.tokens import estimate_tokens
 
 
 class WeekTwoTests(unittest.TestCase):
@@ -41,7 +41,7 @@ class WeekTwoTests(unittest.TestCase):
             with MemtyLedger(path):
                 pass
             code = """import sys
-from memty.ledger import MemtyLedger
+from memty.vault.ledger import MemtyLedger
 with MemtyLedger(sys.argv[1]) as ledger:
     for i in range(20):
         ledger.record('processes', 'p' + sys.argv[2] + '_' + str(i), 'value')
@@ -58,7 +58,7 @@ with MemtyLedger(sys.argv[1]) as ledger:
 
     def test_daemon_shared_by_cli_clients_and_restart(self):
         import subprocess, sys
-        from memty.daemon import status, stop
+        from memty.runtime.daemon import status, stop
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "daemon.sqlite3")
             try:
@@ -87,7 +87,7 @@ with MemtyLedger(sys.argv[1]) as ledger:
                 stop(path)
 
     def test_daemon_rejects_unauthenticated_requests(self):
-        from memty.daemon import _exchange, ensure_daemon, stop
+        from memty.runtime.daemon import _exchange, ensure_daemon, stop
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "daemon.sqlite3")
             try:
@@ -98,7 +98,7 @@ with MemtyLedger(sys.argv[1]) as ledger:
                 stop(path)
 
     def test_daemon_saves_and_recalls_one_numbered_context(self):
-        from memty.daemon import DaemonLedger, stop
+        from memty.runtime.daemon import DaemonLedger, stop
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "daemon.sqlite3")
             ledger = DaemonLedger(path)
@@ -144,9 +144,9 @@ with MemtyLedger(sys.argv[1]) as ledger:
                 paths[name].write_bytes(data)
             before = self._snapshot(tmp)
             opened = []
-            with patch("memty.connect.subprocess.run",
+            with patch("memty.integrations.mcp.connect.subprocess.run",
                        side_effect=lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", "")), \
-                 patch("memty.connect._open_url", side_effect=opened.append), \
+                 patch("memty.integrations.mcp.connect._open_url", side_effect=opened.append), \
                  patch("os.replace", side_effect=AssertionError("replace config")), \
                  patch("pathlib.Path.write_text", side_effect=AssertionError("write config")), \
                  patch("pathlib.Path.write_bytes", side_effect=AssertionError("write config")):
@@ -166,7 +166,7 @@ with MemtyLedger(sys.argv[1]) as ledger:
     def test_cursor_link_matches_documented_format(self):
         import base64
         from urllib.parse import parse_qs, urlsplit
-        from memty.connect import cursor_install_link
+        from memty.integrations.mcp.connect import cursor_install_link
         link = cursor_install_link({"command": "C:\\Py 3\\python.exe", "args": ["-m", "memty", "mcp"]})
         parts = urlsplit(link)
         self.assertEqual((parts.scheme, parts.netloc, parts.path),
@@ -192,8 +192,8 @@ with MemtyLedger(sys.argv[1]) as ledger:
             def fake_run(cmd, **kwargs):
                 calls.append(cmd)
                 return subprocess.CompletedProcess(cmd, 0, "", "")
-            with patch("memty.connect.subprocess.run", side_effect=fake_run), \
-                 patch("memty.connect._open_url", side_effect=AssertionError("opened")):
+            with patch("memty.integrations.mcp.connect.subprocess.run", side_effect=fake_run), \
+                 patch("memty.integrations.mcp.connect._open_url", side_effect=AssertionError("opened")):
                 result = connect_clients(paths, claude_cli="claude", executable="/py",
                                          clients=["claude code", "Cursor"])["clients"]
             self.assertEqual(set(result), {"Claude Code", "Cursor"})
@@ -205,7 +205,7 @@ with MemtyLedger(sys.argv[1]) as ledger:
             ])
 
             calls.clear()
-            with patch("memty.connect.subprocess.run", side_effect=fake_run):
+            with patch("memty.integrations.mcp.connect.subprocess.run", side_effect=fake_run):
                 same = connect_clients(paths, claude_cli="claude", executable="/old",
                                        clients=["Claude Code"])["clients"]
                 plan = connect_clients(paths, claude_cli="claude", executable="/new",
@@ -215,7 +215,7 @@ with MemtyLedger(sys.argv[1]) as ledger:
             self.assertEqual(calls, [])
 
             failing = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom")
-            with patch("memty.connect.subprocess.run", side_effect=failing):
+            with patch("memty.integrations.mcp.connect.subprocess.run", side_effect=failing):
                 broken = connect_clients(paths, claude_cli="claude", executable="/new",
                                          clients=["Claude Code"])["clients"]["Claude Code"]
             self.assertEqual((broken["status"], broken["error"]), ("error", "boom"))
@@ -262,7 +262,10 @@ with MemtyLedger(sys.argv[1]) as ledger:
                     async with ClientSession(reader, writer) as session:
                         await session.initialize()
                         tools = await session.list_tools()
-                        self.assertEqual([tool.name for tool in tools.tools], ["memty_sync", "memty_drill"])
+                        self.assertEqual([tool.name for tool in tools.tools],
+                                         ["memty_sync", "memty_propose", "memty_drill"])
+                        for tool in tools.tools:  # the MCP Context is injected, never a tool argument
+                            self.assertNotIn("ctx", tool.inputSchema.get("properties", {}))
                         templates = await session.list_resource_templates()
                         self.assertEqual(str(templates.resourceTemplates[0].uriTemplate), "memty://capsule/{namespace}")
                         result = await session.call_tool("memty_sync", {"namespace": "one", "action": "remember", "slot": "color", "value": "blue"})
@@ -274,7 +277,7 @@ with MemtyLedger(sys.argv[1]) as ledger:
                         denied = await session.call_tool("memty_drill", {"namespace": "one", "slot": "editor"})
                         self.assertIn("local_only", str(denied.content))
                         import subprocess
-                        from memty.daemon import status
+                        from memty.runtime.daemon import status
                         first_pid = status(env["MEMTY_DB"])["pid"]
                         cli = subprocess.run([sys.executable, "-m", "memty", "stats"],
                                              env=env, capture_output=True, text=True, timeout=15)
@@ -292,7 +295,7 @@ with MemtyLedger(sys.argv[1]) as ledger:
             try:
                 asyncio.run(exercise())
             finally:
-                from memty.daemon import stop
+                from memty.runtime.daemon import stop
                 stop(env["MEMTY_DB"])
 
 if __name__ == "__main__":

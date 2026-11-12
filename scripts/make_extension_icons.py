@@ -1,6 +1,6 @@
 """Build clean Chrome extension icons from the Memty logo PNG.
 
-Usage: python scripts/make_extension_icons.py static/assets/memty_browser_extention.png memty/browser_extension/icons preview.png
+Usage: python scripts/make_extension_icons.py static/assets/memty_browser_extention.png memty/integrations/browser/extension/icons preview.png
 (needs Pillow, NumPy, SciPy)
 """
 import sys

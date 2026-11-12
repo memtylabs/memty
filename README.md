@@ -30,7 +30,7 @@ This repository contains two things:
 
 | | What it is | Status |
 | --- | --- | --- |
-| **The `memty` package** | The memory vault, CLI, MCP server, browser bridge and extension, and model-routing SDK | [On PyPI](https://pypi.org/project/memty/), v0.2.0 |
+| **The `memty` package** | The local memory vault, the `memtyd` daemon, CLI, MCP server, and browser bridge and extension | [On PyPI](https://pypi.org/project/memty/), v0.2.0 |
 | **The web workspace** | A multi-provider AI chat app (Next.js, Express, and MongoDB) | Run it yourself; see [Web workspace](#web-workspace) |
 
 > **Status:** Memty is in alpha (0.x). The vault's storage format is stable and covered by tests; commands and options may still change between minor versions.
@@ -59,6 +59,11 @@ memty serve --autostart   # start the local bridge now and at every login (one t
 memty extension --open    # install the browser extension folder and open it
 memty connect             # optional: Claude Desktop, Claude Code, Cursor, Windsurf
 ```
+
+On Windows, if `memty` is not recognized, run `py -m pip install --upgrade memty`
+followed by `py -m memty`. You can replace `memty` with `py -m memty` in the
+commands above. See [Windows troubleshooting](memty/README.md#windows-memty-is-not-recognized)
+for PATH and virtual environment help.
 
 Load the extension once: open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, click **Load unpacked**, and choose the folder that opened. It pairs itself with Memty, so there's no token to copy.
 
@@ -217,34 +222,13 @@ See [`.env.example`](.env.example) and [`backend/.env.example`](backend/.env.exa
 
 For semantic memory retrieval, create the Atlas Search vector index on `Memory.user_memories` from [`backend/memory-vector-index.json`](backend/memory-vector-index.json). It expects 768-dimensional cosine vectors and filters on `userId` and `status`. Without the index or an embedding service, retrieval falls back to lexical and recency scoring.
 
-## 🔀 Model-routing SDK
-
-The same `memty` package includes prompt-aware model routing and a multi-provider chat client:
-
-```powershell
-memty init      # writes ~/.memty/models.json; set each provider's API key in your environment
-memty models
-memty route "Review this Python function"
-memty chat --interactive --chat-id work
-```
-
-```python
-from memty import load_client
-
-client = load_client()  # reads ~/.memty/models.json
-answer = client.chat("Review this Python function", chat_id="code-review")
-print(answer.model_id, answer.text)
-```
-
-The router doesn't use the vault to choose models yet; memory-aware routing is on the roadmap.
-
 ## 🗺️ Project map
 
 | Path | What lives here |
 | --- | --- |
-| [`memty/`](memty/README.md) | The Python package: vault, compiler, CLI, daemon, MCP server, web bridge, and fact extraction |
-| [`memty/browser_extension/`](memty/browser_extension/README.md) | The Memty Bridge browser extension (shipped inside the package) |
-| [`memoryport/`](memoryport/README.md) | Model-routing SDK and compatibility code for older vaults |
+| [`memty/`](memty/README.md) | The Python package, one folder per job ([code layout](memty/README.md#code-layout)): `vault/`, `context/`, `extraction/`, `trust/`, `runtime/`, `integrations/` |
+| [`memty/integrations/browser/extension/`](memty/integrations/browser/extension/README.md) | The Memty Bridge browser extension (shipped inside the package) |
+| [`memoryport/`](memoryport/README.md) | The older temporal vault, kept for the `memory-vault` Docker service (`memty-api`) |
 | [`tests/`](tests/) | Package tests (`python -m pytest tests`) |
 | [`GitPage/`](GitPage/index.html) | The product website, deployed to [GitHub Pages](https://memtylabs.github.io/memty/) on every change to `main` |
 | [`app/`](app/README.md) | Web workspace: Next.js pages, API routes, and chat orchestration |
@@ -263,7 +247,7 @@ The router doesn't use the vault to choose models yet; memory-aware routing is o
 | **Week 2:** shared `memtyd` daemon, MCP server, safe `memty connect` | ✅ Shipped |
 | **Week 3:** browser extension, fact manager, readable capsules, local extraction, pairing, autostart, PyPI v0.2.0 | ✅ Shipped |
 | Chrome Web Store listing (one-click install) | ⏭️ Next |
-| Memory-aware model routing | 🗓️ Planned |
+| Trust control plane: `memty scan`, agent proposal inbox, context receipts and `memty report` | 🔨 Built, unreleased |
 | [Synthetic token payload benchmark](benchmarks/token_burn/README.md) | Available; real-provider and product comparisons remain to be measured |
 
 See the [changelog](memty/CHANGELOG.md) for details.
@@ -286,7 +270,7 @@ Review the [Privacy Notice](app/privacy/page.tsx) and [Terms](app/terms/page.tsx
 ## 📚 Documentation
 
 - [Memty package: CLI, Python API, MCP, browser bridge, and security](memty/README.md)
-- [Browser extension](memty/browser_extension/README.md)
+- [Browser extension](memty/integrations/browser/extension/README.md)
 - [Changelog](memty/CHANGELOG.md)
 - [Web frontend](app/README.md) · [Backend](backend/README.md) · [Memory layers](app/memory/README.md) · [Providers](providers/README.md)
 - [Website](https://memtylabs.github.io/memty/)
