@@ -38,10 +38,12 @@ import time
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlsplit
 
-from .compiler import LocalRoutingRequired, render_plain_with_count, slot_label
-from .extract import MAX_INPUT_CHARS, extract_facts
-from .ledger import LockedSlot, TombstonedSlot, _CONTEXT_SLOT_SUFFIX, _normalize_slot
-from .tokens import estimate_tokens
+from ...context.privacy import LocalRoutingRequired
+from ...context.render import render_plain_with_count, slot_label
+from ...extraction.atomic_facts import MAX_INPUT_CHARS, extract_facts
+from ...vault.ledger import LockedSlot, TombstonedSlot, _CONTEXT_SLOT_SUFFIX, _normalize_slot
+from ...vault.tokens import estimate_tokens
+from ...trust.receipts import log_blocked, log_served
 
 DEFAULT_PORT = 8765
 WEB_CAPSULE_TOKENS = 350
@@ -436,9 +438,14 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 result = self.server.ledger.context_selected(
                     namespace, [fact["id"] for fact in group["facts"]], provider=provider, token_budget=tokens)
             except LocalRoutingRequired:
+                log_blocked(self.server.ledger, "web", provider, namespace=namespace)
                 self._error(HTTPStatus.CONFLICT, "local_routing_required",
                             "A SECRET fact in this context cannot be sent to a web assistant.")
                 return
+            fact_ids = result.pop("fact_ids", None) or []
+            if result.get("text"):
+                log_served(self.server.ledger, "web", provider, result, namespace=namespace,
+                           fact_ids=fact_ids)
             self._send(HTTPStatus.OK, {**result, "namespace": namespace, "provider": provider,
                                        "context": context_id})
             return
@@ -455,6 +462,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 question, provider=provider, namespace=namespace,
                 token_budget=TEXT_COMPILE_BUDGET if style == "text" else tokens, strict_namespace=True)
         except LocalRoutingRequired as error:
+            log_blocked(self.server.ledger, "web", provider, namespace=namespace)
             self._error(HTTPStatus.CONFLICT, "local_routing_required",
                         "A SECRET fact matched; it cannot be sent to a web assistant.",
                         namespace=error.namespace, slot=error.slot)
@@ -475,6 +483,12 @@ class BridgeHandler(BaseHTTPRequestHandler):
         else:
             text = result["text"]
             included = result.get("injected_count", 0) if style == "xml" else 0
+        if text:
+            # render_plain trims from the end, so the served facts are the first `included`.
+            served_ids = [item["id"] for item in result["citations"] if "id" in item][:included]
+            log_served(self.server.ledger, "web", provider, result, namespace=namespace,
+                       tokens=estimate_tokens(text), fact_ids=served_ids,
+                       redacted=text.count("[private]") if style == "text" else None)
         # Redaction maps hold the real CONFIDENTIAL values: never send them to a browser.
         self._send(HTTPStatus.OK, {"text": text, "approx_tokens": estimate_tokens(text),
                                    "namespace": namespace, "provider": provider,
@@ -623,7 +637,7 @@ def bridge_identity(db, port: int, timeout: float = 1.0) -> dict | None:
 
 
 def serve(db, user_id, *, port: int = DEFAULT_PORT, allowed_origins=None, quiet=True) -> None:
-    from .daemon import DaemonLedger
+    from ...runtime.daemon import DaemonLedger
     token = load_or_create_token(db)
     ledger = DaemonLedger(db, user_id)  # Shares the one memtyd process with MCP and CLI.
     with BridgeServer(ledger, token, port=port, allowed_origins=allowed_origins, quiet=quiet,

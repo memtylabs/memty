@@ -17,8 +17,8 @@ import time
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
-from memty.ledger import MemtyLedger
-from memty.tokens import estimate_tokens
+from memty.vault.ledger import MemtyLedger
+from memty.vault.tokens import estimate_tokens
 
 FIXTURE = Path(__file__).with_name("architecture.json")
 MODES = ("full_document_replay", "simulated_retrieval", "memty_selected_context")
@@ -85,7 +85,7 @@ def offline_report(fixture: dict, fixture_hash: str, payloads: dict[str, list[st
                   for baseline in ("full_document_replay", "simulated_retrieval")
                   if rows[baseline]["estimated_memory_tokens_total"]}
     return {"mode": "offline_payload_simulation", "fixture": fixture["name"], "fixture_sha256": fixture_hash,
-            "token_counter": "memty.tokens.estimate_tokens (heuristic, not a provider tokenizer)",
+            "token_counter": "memty.vault.tokens.estimate_tokens (heuristic, not a provider tokenizer)",
             "scope": "Memory payload only; no provider, model answer, actual MCP roundtrip, billing or latency measured.",
             "retrieval_baseline": "Curated oracle chunks plus illustrative tool definitions; not a real RAG or MCP product.",
             "continuity_metric": "Exact expected value appears in supplied context; not assistant recall accuracy.",

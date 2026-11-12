@@ -17,34 +17,35 @@
   const status = controls.querySelector('.demo-stage-status');
   const steps = [
     {
-      title: '1. Install Memty and the SDK',
-      copy: 'Install the Memty Python package from the repository. It includes the model router and the local portable-memory vault.',
-      code: 'python -m pip install "memty @ git+https://github.com/memtylabs/memty.git@main"',
-      output: ['Collecting memty from GitHub', 'Router, SDK, and Memty vault installed']
+      title: '1. Install Memty',
+      copy: 'One Python package: the local vault, the memtyd daemon, the MCP server, and the browser extension. Nothing leaves your computer until you send a chat.',
+      code: 'python -m pip install memty\nmemty extension',
+      output: ['memty installed', 'Memty Bridge is ready in ~/.memty/browser-extension']
     },
     {
-      title: '2. Configure providers and models',
-      copy: 'Create the starter catalog, add model IDs and task tags, then provide API keys through environment variables.',
-      code: 'memty init\n# Edit ~/.memty/models.json\n# Set provider API keys in your environment',
-      output: ['Catalog: ~/.memty/models.json', 'Keep provider keys outside the model catalog']
+      title: '2. Bootstrap a project',
+      copy: 'Run it once in a code folder. Memty reads the manifests and saves baseline facts with no model and no tokens; env templates contribute key names only.',
+      code: 'cd ~/code/billing-api\nmemty scan',
+      output: ['Scanned 4 file(s) in 3.1 ms (0 LLM tokens)', 'project.billing-api: 14 saved, 0 updated, 0 unchanged']
     },
     {
-      title: '3. Route from the user prompt',
-      copy: 'Task rules inspect the prompt, then rank eligible configured models using task tags and catalog settings.',
-      code: 'from memty import load_client\nclient = load_client()\nresult = client.route(\n    "Review this Python function",\n    strategy="rules",\n)\nprint(result.task_type, result.model_id)',
-      output: ['task=code | selected=<eligible configured model ID>', 'Rules prefer code tags, then capability, price, and latency', 'Route preview is local; no model request is sent']
+      title: '3. Connect your agents',
+      copy: 'Each client installs Memty through its own official installer. Every agent then talks to the same daemon and the same vault.',
+      code: 'memty connect',
+      output: ['Claude Code: connected', 'Cursor: install prompt opened', 'Codex CLI: connected']
     },
     {
-      title: '4. Retrieve and pass relevant memory',
-      copy: 'Save an explicit fact. On chat, Memty retrieves relevant facts allowed for the selected provider and adds them to that model request.',
-      code: 'client = load_client()\nclient.remember("work.preferences", "editor", "VS Code")\nreply = client.chat(\n    "Which editor do I use?",\n    chat_id="editor-chat",\n    strategy="rules",\n)',
-      output: ['Memty retrieves matching provider-allowed facts', 'Selected model receives the prompt with relevant saved context', 'Chat transcript remains separate from the durable fact vault']
+      title: '4. Remember once, recall anywhere',
+      copy: 'Save a fact from any client. The next assistant gets a capsule of only the relevant facts, filtered by the privacy gate for that provider.',
+      code: 'memty remember work.preferences editor "VS Code"\nmemty recall "Which editor do I use?" --namespace work.preferences',
+      output: ['<memty_state v="1" provider="local">', 'work.preferences.editor="VS Code"', '</memty_state>']
     },
     {
-      title: '5. Switch models, keep saved memory',
-      copy: 'Pin a different configured model to another chat. The SDK uses the same local fact vault; chat transcripts stay separate.',
-      code: 'client.select_model("YOUR_MODEL_ID", chat_id="second-chat")\nreply = client.chat(\n    "Which editor do I use?",\n    chat_id="second-chat",\n)\nprint(reply.text)',
-      output: ['Replace YOUR_MODEL_ID with an ID from your catalog', 'Relevant eligible memory can be recalled by the second model']
+      title: '5. Stay in control',
+      copy: 'Agents propose changes instead of overwriting your facts, and every capsule served leaves a receipt with counts and slot names, never values.',
+      code: 'memty inbox\nmemty approve 1\nmemty report',
+      output: ['[1] project.api -> cache_engine: "Redis" => "DragonflyDB" (Proposed by Cursor)',
+               'Capsules served, verified facts reused, tokens saved, SECRET slots protected']
     }
   ];
 

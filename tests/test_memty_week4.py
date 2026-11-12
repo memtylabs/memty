@@ -12,8 +12,8 @@ from unittest.mock import patch
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from memty.connect import connect_clients
-from memty.ledger import MemtyLedger
+from memty.integrations.mcp.connect import connect_clients
+from memty.vault.ledger import MemtyLedger
 
 
 class ClientSetupTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class ClientSetupTests(unittest.TestCase):
                     return subprocess.CompletedProcess(argv, 1, "", "not found")
                 return subprocess.CompletedProcess(argv, 0, "", "")
 
-            with patch("memty.connect.subprocess.run", side_effect=run), \
+            with patch("memty.integrations.mcp.connect.subprocess.run", side_effect=run), \
                  patch("pathlib.Path.write_text", side_effect=AssertionError("direct config write")):
                 result = connect_clients(paths, codex_cli="codex", code_cli="code",
                                          claude_cli=None, executable="/python")["clients"]
@@ -58,7 +58,7 @@ class MCPDrillTests(unittest.TestCase):
                         saved = await first.call_tool("memty_sync", {"namespace": "project.api",
                                                                       "set_slots": {"editor": "VS Code"}})
                         self.assertFalse(saved.isError)
-                        from memty.daemon import status
+                        from memty.runtime.daemon import status
                         pid = status(db)["pid"]
                         async with stdio_client(await connect_as("cursor")) as (reader_b, writer_b):
                             async with ClientSession(reader_b, writer_b) as second:
@@ -70,7 +70,7 @@ class MCPDrillTests(unittest.TestCase):
             try:
                 asyncio.run(exercise())
             finally:
-                from memty.daemon import stop
+                from memty.runtime.daemon import stop
                 stop(db)
 
     def test_local_drill_is_bounded_and_tombstones_are_hidden(self):
@@ -98,7 +98,7 @@ class MCPDrillTests(unittest.TestCase):
             try:
                 asyncio.run(exercise())
             finally:
-                from memty.daemon import stop
+                from memty.runtime.daemon import stop
                 stop(db)
 
 

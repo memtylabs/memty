@@ -8,7 +8,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 
-const contentScript = fs.readFileSync(path.join(__dirname, '../memty/browser_extension/content.js'), 'utf8');
+const contentScript = fs.readFileSync(path.join(__dirname, '../memty/integrations/browser/extension/content.js'), 'utf8');
 const chromeCandidates = [process.env.MEMTY_TEST_CHROME,
   process.platform === 'win32' && 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   process.platform === 'darwin' && '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',

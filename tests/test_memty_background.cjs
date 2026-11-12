@@ -21,7 +21,7 @@ test('browser saves create separate contexts and retrieval selects one namespace
         : pathname === '/capsule' ? { text: 'selected context' } : {};
       return { ok: true, status: 200, json: async () => body };
     } });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../memty/browser_extension/background.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../memty/integrations/browser/extension/background.js'), 'utf8'), context);
   const sender = { url: 'https://chatgpt.com/c/test' };
   const detected = await context.handle({ type: 'namespace-options', hint: 'The repo.memty project uses MCP.' }, sender);
   assert.equal(detected.namespace, 'repo.memty');

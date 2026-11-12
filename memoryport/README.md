@@ -1,22 +1,19 @@
-# Memty SDK compatibility modules
+# memoryport: the older temporal vault
 
-The public product, package, Python import path, and primary CLI are **Memty**. Install the `memty` distribution and use `from memty import ...`; model routing, provider adapters, portable memory, the temporal vault, and the atomic context compiler are available through that namespace.
+This package holds Memty's previous, event-sourced memory vault. It is kept for one reason: the `memory-vault` service in [`compose.yaml`](../compose.yaml) runs its HTTP API (`memty-api`, built from [`Dockerfile.vault`](../Dockerfile.vault)) for the web workspace.
+
+New local memory lives in [`memty`](../memty/README.md): one SQLite vault, one daemon (`memtyd`), MCP for desktop and CLI agents, and the browser extension. To bring old facts across, run:
 
 ```shell
-python -m pip install memty
-memty --help
-memty models
-memty chat --interactive
+memty migrate ~/.memty/memory.sqlite3
 ```
 
-```python
-from memty import Memty, ModelConfig, load_client
+The older vault's entry points are still available:
 
-assistant = load_client()  # reads ~/.memty/models.json
-answer = assistant.chat("Summarize this question")
-print(answer.text)
+```shell
+memty-api          # HTTP API used by the memory-vault container (needs the [server] extra)
+memty vault ...    # its CLI
+memty vault-mcp    # its MCP server
 ```
 
-This directory contains implementation modules retained so existing integrations and stored vaults continue to work during migration. New applications should import from `memty`, use the `memty` CLI, and configure `MEMTY_*` environment variables. Existing `MEMTY_*` / `MEMTY_VAULT_*` settings and older data folders are still recognized as fallbacks.
-
-See the [Memty guide](../memty/README.md), [project overview](../README.md), and [GitHub Pages site](../GitPage/index.html) for installation, CLI, SDK, memory, routing, and deployment details.
+Model routing and the multi-provider chat SDK that used to live here have been removed. Memty is a memory layer, not a model router.

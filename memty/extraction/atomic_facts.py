@@ -17,8 +17,8 @@ import os
 import re
 from urllib import request as urlrequest
 
-from .ledger import FACT_TOKEN_LIMIT
-from .tokens import estimate_tokens, truncate_tokens
+from ..vault.ledger import FACT_TOKEN_LIMIT
+from ..vault.tokens import estimate_tokens, truncate_tokens
 
 # The review screen and web bridge accept at most 25 facts in one save.
 MAX_FACTS = 25

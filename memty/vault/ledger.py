@@ -7,10 +7,14 @@ Storage is intentionally small and inspectable:
 * ``rolling_summaries`` one capped summary per namespace
 * ``raw_drilldown``     raw source text, fetched only by an explicit call
 * ``atomic_fact_audit`` previous versions, kept for temporal auditing
+* ``fact_proposals``    agent-proposed changes waiting for the user (``memty inbox``)
+* ``fact_usage``        per-fact hit counters for served capsules
+* ``context_receipts``  one row per served capsule: counts and slot names, never values
 
 The three functional tables are the only tables used by retrieval.  The audit
 table is a small append-only safety net for superseded values and is purged on
-``forget``.  No network calls or model calls are made by this module.
+``forget`` (as are proposals for that slot).  No network calls or model calls
+are made by this module.
 """
 
 from __future__ import annotations
@@ -31,7 +35,7 @@ from typing import Any, Iterator
 from .tokens import estimate_tokens, truncate_tokens
 from .vectors import pack_vector, unpack_vector
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 FACT_TOKEN_LIMIT = 40
 SUMMARY_TOKEN_LIMIT = 150
 DEFAULT_CONTEXT_BUDGET = 600
@@ -44,6 +48,10 @@ _KEY_PART = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _CONTEXT_SLOT_SUFFIX = re.compile(r"__c([0-9a-f]{10})([0-9a-f]{2})$")
 _RULE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _TOKEN_TERM = re.compile(r"[\w'-]{2,}", re.UNICODE)
+_RECEIPT_CHANNELS = frozenset({"recall", "mcp", "web", "clip"})
+_PROPOSAL_STATES = frozenset({"PENDING", "APPROVED", "REJECTED", "SUPERSEDED"})
+_SENSITIVITY_RANK = {"PUBLIC": 0, "INTERNAL": 1, "CONFIDENTIAL": 2, "SECRET": 3}
+MAX_RECEIPTS = 50_000
 
 
 class TombstonedSlot(ValueError):
@@ -87,6 +95,12 @@ def _terms(text: str) -> frozenset[str]:
 
 def _fts_query(terms: set[str] | frozenset[str]) -> str:
     return " OR ".join('"' + term.replace('"', '""') + '"*' for term in sorted(terms))
+
+
+def _client_name(value: Any, default: str = "unknown") -> str:
+    """Normalize a self-reported client name ("Claude Code" -> "claude-code")."""
+    name = re.sub(r"[^a-z0-9_.-]+", "-", str(value or "").strip().casefold()).strip("-.")[:80]
+    return name or default
 
 
 def _json_list(value: Any) -> list[str]:
@@ -247,6 +261,52 @@ class MemtyLedger:
                 );
                 CREATE INDEX IF NOT EXISTS atomic_fact_audit_slot
                     ON atomic_fact_audit(user_id, namespace, slot, seq DESC);
+
+                CREATE TABLE IF NOT EXISTS fact_proposals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    namespace TEXT NOT NULL,
+                    slot TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    previous_value TEXT,
+                    previous_state TEXT,
+                    sensitivity TEXT NOT NULL DEFAULT 'PUBLIC',
+                    proposed_by TEXT NOT NULL,
+                    reason TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    created_at INTEGER NOT NULL,
+                    resolved_at INTEGER
+                );
+                CREATE INDEX IF NOT EXISTS fact_proposals_status
+                    ON fact_proposals(user_id, status, id);
+                CREATE INDEX IF NOT EXISTS fact_proposals_slot
+                    ON fact_proposals(user_id, namespace, slot, status);
+
+                CREATE TABLE IF NOT EXISTS fact_usage (
+                    fact_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    hit_count INTEGER NOT NULL DEFAULT 0,
+                    last_hit_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS context_receipts (
+                    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    channel TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    client TEXT NOT NULL,
+                    namespace TEXT,
+                    tokens_injected INTEGER NOT NULL DEFAULT 0,
+                    baseline_tokens INTEGER NOT NULL DEFAULT 0,
+                    facts_injected INTEGER NOT NULL DEFAULT 0,
+                    verified_facts INTEGER NOT NULL DEFAULT 0,
+                    redacted INTEGER NOT NULL DEFAULT 0,
+                    secrets_blocked INTEGER NOT NULL DEFAULT 0,
+                    slots_used TEXT NOT NULL DEFAULT '[]'
+                );
+                CREATE INDEX IF NOT EXISTS context_receipts_recent
+                    ON context_receipts(user_id, seq DESC);
             """)
             db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
             self._fts = self._create_fts(db)
@@ -596,7 +656,14 @@ class MemtyLedger:
             rows = db.execute(
                 "SELECT * FROM atomic_facts WHERE " + " AND ".join(clauses)
                 + " ORDER BY namespace, slot, id", params).fetchall()
-        return [self._fact(row) for row in rows]
+            hits = {row["fact_id"]: row["hit_count"] for row in db.execute(
+                "SELECT fact_id, hit_count FROM fact_usage WHERE user_id=?", (self.user_id,))}
+        facts = []
+        for row in rows:
+            fact = self._fact(row)
+            fact["hit_count"] = int(hits.get(row["id"], 0))
+            facts.append(fact)
+        return facts
 
     def forget(self, namespace: str | None = None, slot: str | None = None, *,
                fact_id: str | None = None, purge_raw: bool = False) -> dict[str, Any] | None:
@@ -623,6 +690,9 @@ class MemtyLedger:
             # Forget means forget: the audit trail must not retain the value.
             db.execute("DELETE FROM atomic_fact_audit WHERE user_id=? AND fact_id=?",
                        (self.user_id, current["id"]))
+            # Proposals hold candidate and previous values for this slot as well.
+            db.execute("DELETE FROM fact_proposals WHERE user_id=? AND namespace=? AND slot=?",
+                       (self.user_id, row["namespace"], row["slot"]))
             source_id = row["source_id"]
             if purge_raw and source_id:
                 still_used = db.execute(
@@ -866,7 +936,7 @@ class MemtyLedger:
                 query_embedding: list[float] | None = None,
                 strict_namespace: bool = False) -> dict[str, Any]:
         """Compile a deterministic ``<memty_state>`` block within ``token_budget``."""
-        from .compiler import ContextCompiler
+        from ..context.compiler import ContextCompiler
         return ContextCompiler(self).compile(
             query, provider=provider, token_budget=token_budget, namespace=namespace,
             semantic_scores=semantic_scores, query_embedding=query_embedding,
@@ -875,7 +945,7 @@ class MemtyLedger:
     def context_selected(self, namespace: str, fact_ids: list[str], *, provider: str,
                          token_budget: int = 2000) -> dict[str, Any]:
         """Compile only the specified facts in order, applying the normal privacy gate."""
-        from .compiler import ContextCompiler
+        from ..context.compiler import ContextCompiler
         return ContextCompiler(self).compile_selected(namespace, fact_ids, provider=provider,
                                                        token_budget=token_budget)
 
@@ -908,6 +978,296 @@ class MemtyLedger:
             yield self.rehydrate(pending, replacements)
 
     # ------------------------------------------------------------------
+    # Agent proposal inbox
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _proposal(row: sqlite3.Row) -> dict[str, Any]:
+        return {"id": row["id"], "namespace": row["namespace"], "slot": row["slot"],
+                "value": row["value"], "previous_value": row["previous_value"],
+                "previous_state": row["previous_state"], "sensitivity": row["sensitivity"],
+                "proposed_by": row["proposed_by"], "reason": row["reason"],
+                "status": row["status"], "created_at": row["created_at"],
+                "resolved_at": row["resolved_at"]}
+
+    def propose(self, namespace: str, slot: str, value: str, *, proposed_by: str = "agent",
+                sensitivity: str = "PUBLIC", reason: str = "") -> dict[str, Any]:
+        """Let an agent suggest a fact without letting it overwrite the user's memory.
+
+        * Same value as the active fact: nothing happens (``unchanged``).
+        * Brand-new slot: saved as ``EXTRACTED`` (low trust; it can never
+          override a confirmed fact) and reported as ``applied``.
+        * Any change to an existing or deleted slot: staged in the inbox as
+          ``pending_review`` until the user runs ``memty approve`` or ``reject``.
+
+        The result never echoes the existing value, which may be confidential.
+        """
+        namespace, slot = _normalize_namespace(namespace), _normalize_slot(slot)
+        value = str(value).strip()
+        if not value:
+            raise ValueError("value cannot be empty")
+        if estimate_tokens(value) > FACT_TOKEN_LIMIT:
+            raise ValueError(f"atomic fact must be at most {FACT_TOKEN_LIMIT} tokens")
+        sensitivity = str(sensitivity).upper()
+        if sensitivity not in _SENSITIVITY_LEVELS:
+            raise ValueError("sensitivity must be PUBLIC, INTERNAL, CONFIDENTIAL or SECRET")
+        proposed_by = _client_name(proposed_by, "agent")
+        reason = " ".join(str(reason or "").split())[:200]
+        base = {"namespace": namespace, "slot": slot, "proposed_by": proposed_by}
+
+        current = self.find(namespace, slot)
+        if current and not current["tombstone"] and current["value"] == value:
+            return {**base, "status": "unchanged"}
+        if current is None:
+            try:
+                self.record(namespace, slot, value, verification_state="EXTRACTED",
+                            sensitivity=sensitivity, source_id="agent:" + proposed_by,
+                            create_only=True)
+                return {**base, "status": "applied", "verification_state": "EXTRACTED"}
+            except LockedSlot:  # created concurrently: review it like any other change
+                current = self.find(namespace, slot)
+
+        now = _utc_now_ms()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            duplicate = db.execute("""
+                SELECT id FROM fact_proposals
+                 WHERE user_id=? AND namespace=? AND slot=? AND value=? AND status='PENDING'
+            """, (self.user_id, namespace, slot, value)).fetchone()
+            if duplicate:
+                db.execute("ROLLBACK")
+                return {**base, "status": "pending_review", "proposal_id": duplicate["id"],
+                        "duplicate": True}
+            # Only the newest suggestion for a slot stays open.
+            db.execute("""
+                UPDATE fact_proposals SET status='SUPERSEDED', resolved_at=?
+                 WHERE user_id=? AND namespace=? AND slot=? AND status='PENDING'
+            """, (now, self.user_id, namespace, slot))
+            deleted = bool(current and current["tombstone"])
+            cursor = db.execute("""
+                INSERT INTO fact_proposals(user_id,namespace,slot,value,previous_value,previous_state,
+                                           sensitivity,proposed_by,reason,status,created_at)
+                VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?)
+            """, (self.user_id, namespace, slot, value,
+                  None if not current or deleted else current["value"],
+                  "DELETED" if deleted else (current["verification_state"] if current else None),
+                  sensitivity, proposed_by, reason, now))
+            proposal_id = cursor.lastrowid
+            db.execute("COMMIT")
+        return {**base, "status": "pending_review", "proposal_id": proposal_id}
+
+    def proposals(self, *, status: str | None = "PENDING", limit: int = 100) -> list[dict[str, Any]]:
+        """List proposals, oldest first (``status=None`` lists every state)."""
+        params: list[Any] = [self.user_id]
+        query = "SELECT * FROM fact_proposals WHERE user_id=?"
+        if status is not None:
+            status = str(status).upper()
+            if status not in _PROPOSAL_STATES:
+                raise ValueError("status must be PENDING, APPROVED, REJECTED or SUPERSEDED")
+            query += " AND status=?"
+            params.append(status)
+        query += " ORDER BY id LIMIT ?"
+        params.append(max(1, min(int(limit), 1000)))
+        with self._connect() as db:
+            rows = db.execute(query, params).fetchall()
+        return [self._proposal(row) for row in rows]
+
+    def resolve_proposal(self, proposal_id: int, *, approve: bool) -> dict[str, Any]:
+        """Approve (save as USER_CONFIRMED) or reject one pending proposal."""
+        try:
+            proposal_id = int(proposal_id)
+        except (TypeError, ValueError) as error:
+            raise ValueError("proposal id must be a number") from error
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM fact_proposals WHERE user_id=? AND id=?",
+                             (self.user_id, proposal_id)).fetchone()
+        if row is None:
+            raise ValueError(f"proposal {proposal_id} not found")
+        if row["status"] != "PENDING":
+            raise ValueError(f"proposal {proposal_id} is already {row['status'].lower()}")
+        fact = None
+        if approve:
+            current = self.find(row["namespace"], row["slot"])
+            sensitivity = row["sensitivity"]
+            allowed = blocked = None
+            ephemeral = False
+            if current:
+                # Approving a new value never weakens the slot's existing privacy policy.
+                if _SENSITIVITY_RANK[current["sensitivity"]] > _SENSITIVITY_RANK[sensitivity]:
+                    sensitivity = current["sensitivity"]
+                allowed, blocked = current["allowed_providers"], current["blocked_providers"]
+                ephemeral = current["ephemeral_redaction"]
+            fact = self.record(row["namespace"], row["slot"], row["value"],
+                               verification_state="USER_CONFIRMED", sensitivity=sensitivity,
+                               allowed_providers=allowed, blocked_providers=blocked,
+                               ephemeral_redaction=ephemeral,
+                               source_id="agent:" + row["proposed_by"])
+        now = _utc_now_ms()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE fact_proposals SET status=?, resolved_at=? WHERE user_id=? AND id=?",
+                       ("APPROVED" if approve else "REJECTED", now, self.user_id, proposal_id))
+            db.execute("COMMIT")
+        result = {"id": proposal_id, "status": "approved" if approve else "rejected",
+                  "namespace": row["namespace"], "slot": row["slot"], "value": row["value"]}
+        if fact is not None:
+            result["version"] = fact["version"]
+        return result
+
+    # ------------------------------------------------------------------
+    # Context receipts
+    # ------------------------------------------------------------------
+    def log_receipt(self, channel: str, provider: str, *, fact_ids: list[str] | None = None,
+                    tokens_injected: int = 0, namespace: str | None = None,
+                    client: str | None = None, redacted: int = 0,
+                    secrets_blocked: int = 0) -> dict[str, Any]:
+        """Record that a capsule was served: counts and slot names only, never values.
+
+        ``baseline_tokens`` approximates what the same request would cost
+        without the compiler: every active fact in the touched namespaces plus
+        their archived raw sources, at ~4 characters per token.  It is a
+        conservative local estimate, not a provider measurement.
+        """
+        channel = str(channel).casefold()
+        if channel not in _RECEIPT_CHANNELS:
+            raise ValueError("channel must be recall, mcp, web or clip")
+        provider = _client_name(provider, "unknown")
+        client = _client_name(client, provider) if client else provider
+        namespace = _normalize_namespace(namespace) if namespace else None
+        ids = list(dict.fromkeys(item for item in (fact_ids or []) if isinstance(item, str)))[:64]
+        tokens_injected = max(0, int(tokens_injected))
+        now = _utc_now_ms()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows: list[sqlite3.Row] = []
+            if ids:
+                placeholders = ",".join("?" for _ in ids)
+                rows = db.execute(f"""
+                    SELECT id, namespace, slot, verification_state FROM atomic_facts
+                     WHERE user_id=? AND id IN ({placeholders})
+                """, (self.user_id, *ids)).fetchall()
+            for row in rows:
+                db.execute("""
+                    INSERT INTO fact_usage(fact_id,user_id,hit_count,last_hit_at) VALUES(?,?,1,?)
+                    ON CONFLICT(fact_id) DO UPDATE SET hit_count=hit_count+1,
+                                                       last_hit_at=excluded.last_hit_at
+                """, (row["id"], self.user_id, now))
+            baseline = 0
+            namespaces = sorted({row["namespace"] for row in rows})
+            if namespaces:
+                placeholders = ",".join("?" for _ in namespaces)
+                fact_chars = db.execute(f"""
+                    SELECT COALESCE(SUM(LENGTH(namespace)+LENGTH(slot)+LENGTH(value)+4),0) AS n
+                      FROM atomic_facts
+                     WHERE user_id=? AND tombstone=0 AND namespace IN ({placeholders})
+                """, (self.user_id, *namespaces)).fetchone()["n"]
+                raw_chars = db.execute(f"""
+                    SELECT COALESCE(SUM(LENGTH(raw_content)),0) AS n FROM raw_drilldown
+                     WHERE user_id=? AND id IN (
+                        SELECT source_id FROM atomic_facts
+                         WHERE user_id=? AND tombstone=0 AND source_id IS NOT NULL
+                           AND namespace IN ({placeholders}))
+                """, (self.user_id, self.user_id, *namespaces)).fetchone()["n"]
+                baseline = (int(fact_chars) + int(raw_chars) + 3) // 4
+            slots = [f"{row['namespace']}.{row['slot']}" for row in rows]
+            verified = sum(1 for row in rows
+                           if row["verification_state"] in {"USER_CONFIRMED", "SPEC_LOCKED"})
+            cursor = db.execute("""
+                INSERT INTO context_receipts(user_id,created_at,channel,provider,client,namespace,
+                    tokens_injected,baseline_tokens,facts_injected,verified_facts,redacted,
+                    secrets_blocked,slots_used)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (self.user_id, now, channel, provider, client, namespace, tokens_injected,
+                  baseline, len(rows), verified, max(0, int(redacted)),
+                  max(0, int(secrets_blocked)), json.dumps(slots)))
+            seq = int(cursor.lastrowid or 0)
+            if seq and seq % 1000 == 0:
+                db.execute("DELETE FROM context_receipts WHERE user_id=? AND seq<=?",
+                           (self.user_id, seq - MAX_RECEIPTS))
+            db.execute("COMMIT")
+        return {"seq": seq, "channel": channel, "client": client, "facts_injected": len(rows),
+                "tokens_injected": tokens_injected, "baseline_tokens": baseline,
+                "secrets_blocked": max(0, int(secrets_blocked))}
+
+    def receipts(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Most recent receipts first."""
+        with self._connect() as db:
+            rows = db.execute("""
+                SELECT * FROM context_receipts WHERE user_id=? ORDER BY seq DESC LIMIT ?
+            """, (self.user_id, max(1, min(int(limit), 1000)))).fetchall()
+        result = []
+        for row in rows:
+            item = {key: row[key] for key in row.keys() if key not in {"user_id", "slots_used"}}
+            item["slots_used"] = _json_list(row["slots_used"])
+            result.append(item)
+        return result
+
+    def report(self, *, since_ms: int | None = None) -> dict[str, Any]:
+        """Aggregate receipts into the trust summary printed by ``memty report``."""
+        since = max(0, int(since_ms or 0))
+        with self._connect() as db:
+            totals = db.execute("""
+                SELECT COUNT(*) AS requests,
+                       COALESCE(SUM(CASE WHEN facts_injected>0 THEN 1 ELSE 0 END),0) AS served,
+                       COALESCE(SUM(facts_injected),0) AS facts,
+                       COALESCE(SUM(verified_facts),0) AS verified,
+                       COALESCE(SUM(tokens_injected),0) AS injected,
+                       COALESCE(SUM(baseline_tokens),0) AS baseline,
+                       COALESCE(SUM(MAX(baseline_tokens-tokens_injected,0)),0) AS saved,
+                       COALESCE(SUM(redacted),0) AS redacted,
+                       COALESCE(SUM(secrets_blocked),0) AS blocked,
+                       MIN(created_at) AS first_at, MAX(created_at) AS last_at
+                  FROM context_receipts WHERE user_id=? AND created_at>=?
+            """, (self.user_id, since)).fetchone()
+            clients = db.execute("""
+                SELECT client, COUNT(*) AS n FROM context_receipts
+                 WHERE user_id=? AND created_at>=? AND facts_injected>0
+                 GROUP BY client ORDER BY n DESC, client
+            """, (self.user_id, since)).fetchall()
+            channels = db.execute("""
+                SELECT channel, COUNT(*) AS n FROM context_receipts
+                 WHERE user_id=? AND created_at>=? AND facts_injected>0
+                 GROUP BY channel ORDER BY n DESC, channel
+            """, (self.user_id, since)).fetchall()
+            reused = db.execute("""
+                SELECT COUNT(*) AS total,
+                       COALESCE(SUM(CASE WHEN f.verification_state IN ('USER_CONFIRMED','SPEC_LOCKED')
+                                    THEN 1 ELSE 0 END),0) AS verified
+                  FROM fact_usage u JOIN atomic_facts f ON f.id=u.fact_id
+                 WHERE u.user_id=? AND u.hit_count>0 AND u.last_hit_at>=? AND f.tombstone=0
+            """, (self.user_id, since)).fetchone()
+            top = db.execute("""
+                SELECT f.namespace, f.slot, u.hit_count FROM fact_usage u
+                  JOIN atomic_facts f ON f.id=u.fact_id
+                 WHERE u.user_id=? AND f.tombstone=0 AND u.last_hit_at>=?
+                 ORDER BY u.hit_count DESC, u.last_hit_at DESC LIMIT 5
+            """, (self.user_id, since)).fetchall()
+            secret_slots = db.execute("""
+                SELECT COUNT(*) AS n FROM atomic_facts
+                 WHERE user_id=? AND tombstone=0 AND sensitivity='SECRET'
+            """, (self.user_id,)).fetchone()["n"]
+            pending = db.execute(
+                "SELECT COUNT(*) AS n FROM fact_proposals WHERE user_id=? AND status='PENDING'",
+                (self.user_id,)).fetchone()["n"]
+        return {"capsules_served": int(totals["served"]), "requests": int(totals["requests"]),
+                "clients": {row["client"]: row["n"] for row in clients},
+                "channels": {row["channel"]: row["n"] for row in channels},
+                "fact_injections": int(totals["facts"]),
+                "verified_fact_injections": int(totals["verified"]),
+                "distinct_facts_reused": int(reused["total"]),
+                "distinct_verified_facts_reused": int(reused["verified"]),
+                "tokens_injected": int(totals["injected"]),
+                "baseline_tokens": int(totals["baseline"]),
+                "tokens_saved_estimate": int(totals["saved"]),
+                "values_redacted": int(totals["redacted"]),
+                "secret_requests_blocked": int(totals["blocked"]),
+                "secret_slots_protected": int(secret_slots),
+                "pending_proposals": int(pending),
+                "top_facts": [{"slot": f"{row['namespace']}.{row['slot']}", "hits": row["hit_count"]}
+                              for row in top],
+                "first_at": totals["first_at"], "last_at": totals["last_at"],
+                "since": since or None}
+
+    # ------------------------------------------------------------------
     # Inspectable stats and explicit close hook
     # ------------------------------------------------------------------
     def stats(self) -> dict[str, Any]:
@@ -925,10 +1285,16 @@ class MemtyLedger:
                              (self.user_id,)).fetchone()["n"]
             audit = db.execute("SELECT COUNT(*) AS n FROM atomic_fact_audit WHERE user_id=?",
                                (self.user_id,)).fetchone()["n"]
+            pending = db.execute(
+                "SELECT COUNT(*) AS n FROM fact_proposals WHERE user_id=? AND status='PENDING'",
+                (self.user_id,)).fetchone()["n"]
+            receipts = db.execute("SELECT COUNT(*) AS n FROM context_receipts WHERE user_id=?",
+                                  (self.user_id,)).fetchone()["n"]
         return {"path": str(self.path), "user_id": self.user_id, "active_facts": facts,
                 "tombstones": tombstones, "constraints": constraints, "summaries": summaries,
                 "raw_documents": raw,
-                "audit_versions": audit, "fts5": self._fts}
+                "audit_versions": audit, "pending_proposals": pending, "receipts": receipts,
+                "fts5": self._fts}
 
     def __enter__(self) -> "MemtyLedger":
         return self

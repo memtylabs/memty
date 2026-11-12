@@ -10,7 +10,7 @@ Thanks for helping improve Memty. The project has a Next.js app, an Express/Mong
 | Authentication, sessions, REST endpoints, persistence | [Backend guide](backend/README.md) |
 | Provider adapters, model registry, fallbacks | [Provider guide](providers/README.md) |
 | Memory retrieval and dashboard behavior | [Memory guide](app/memory/README.md) |
-| Python vault, CLI, MCP, or SmartRouter | [Memty guide](memty/README.md) |
+| Python vault, daemon, CLI, MCP, or browser bridge | [Memty guide](memty/README.md) |
 
 ## Before you start
 

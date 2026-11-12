@@ -7,10 +7,13 @@ import json
 from importlib import metadata
 import sys
 
-from .compiler import LocalRoutingRequired, render_plain
-from .tokens import estimate_tokens
-from .factory import default_user_id, default_vault_path
-from .ledger import MemtyLedger
+from .context.privacy import LocalRoutingRequired
+from .context.render import render_plain_with_count
+from .vault.tokens import estimate_tokens
+from .vault.paths import default_user_id, default_vault_path
+from .vault.ledger import MemtyLedger
+from .trust.render import format_inbox, format_receipts, format_report
+from .trust.receipts import log_blocked, log_served
 
 
 def _version() -> str:
@@ -48,6 +51,9 @@ def _welcome() -> None:
   memty clip NS      Copy a namespace capsule for any AI
   memty serve        Bridge browser assistants (--autostart once)
   memty extension    Install the browser extension folder
+  memty scan         Bootstrap project facts from manifests (0 tokens)
+  memty inbox        Review facts your agents proposed
+  memty report       See what was served, reused, and protected
   memty stats        View vault statistics
   memty --help       See all commands
 
@@ -67,14 +73,14 @@ def _print(value) -> None:
 
 def _ledger(args) -> MemtyLedger:
     trusted = [item.strip() for item in (args.trusted_provider or []) if item.strip()]
-    from .daemon import DaemonLedger
+    from .runtime.daemon import DaemonLedger
     return DaemonLedger(args.db, args.user, trusted_providers=trusted)
 
 
 def _serve(args) -> None:
-    from . import web_bridge
+    from .integrations.browser import bridge as web_bridge
     if args.no_autostart:
-        from .autostart import uninstall
+        from .runtime.autostart import uninstall
         _print({**uninstall(), **web_bridge.stop_background(args.db)})
         return
     if args.stop:
@@ -87,7 +93,7 @@ def _serve(args) -> None:
     if args.background or args.autostart:
         extra = {}
         if args.autostart:
-            from .autostart import install
+            from .runtime.autostart import install
             extra = install(args.db, args.user, args.port)
         _print({**web_bridge.start_background(args.db, args.user, port=args.port,
                                               allowed_origins=args.allow_origin), **extra,
@@ -104,10 +110,18 @@ def _serve(args) -> None:
 
 
 def _pair(args) -> None:
-    from . import web_bridge
+    from .integrations.browser import bridge as web_bridge
     web_bridge.load_or_create_token(args.db)
-    if not web_bridge.health(args.port):
+    try:
+        # Verifies that a bridge already on the port serves *this* vault; pairing a
+        # different vault's bridge would silently never take effect.
         web_bridge.start_background(args.db, args.user, port=args.port)
+    except RuntimeError as error:
+        raise SystemExit(
+            f"Cannot pair: {error}\n"
+            f"Another Memty bridge (for a different vault or user, or an older version) is using "
+            f"127.0.0.1:{args.port}. Stop it with `memty --db <that vault> serve --stop`, or end the "
+            f"process listening on port {args.port}, then run `memty pair` again.")
     web_bridge.open_pairing(args.db, args.seconds)
     print(f"Pairing is open for {args.seconds // 60 or 1} minute(s).")
     print("In your browser, click Try again on the Memty page, or use Memty in any chat.")
@@ -115,7 +129,7 @@ def _pair(args) -> None:
 
 
 def _extension(args) -> None:
-    from . import extension
+    from .integrations.browser import installer as extension
     try:
         result = extension.install(args.dir)
     except (OSError, RuntimeError) as error:
@@ -141,17 +155,23 @@ def _clip(args, ledger) -> None:
         result = ledger.context(args.query, provider=args.provider, namespace=args.namespace,
                                 token_budget=budget, strict_namespace=True)
     except LocalRoutingRequired as error:
+        log_blocked(ledger, "clip", args.provider, namespace=args.namespace)
         _print(error.as_dict())
         raise SystemExit(2)
     text = result["text"]
     if not text:
         raise SystemExit(f"No facts to share in namespace '{args.namespace}'.")
+    fact_ids = None
     if args.format == "text":  # chat assistants read labelled bullets better than XML slots
-        text = render_plain(result, args.namespace, args.tokens)
+        text, included = render_plain_with_count(result, args.tokens)
+        fact_ids = [item["id"] for item in result["citations"] if "id" in item][:included]
+    log_served(ledger, "clip", args.provider, result, namespace=args.namespace,
+               tokens=estimate_tokens(text), fact_ids=fact_ids,
+               redacted=text.count("[private]") if args.format == "text" else None)
     if args.print_only:
         print(text)
         return
-    from .clipboard import copy_text
+    from .integrations.clipboard import copy_text
     try:
         copy_text(text)
     except Exception as error:  # clipboard tool missing or failed: never lose the capsule
@@ -163,44 +183,100 @@ def _clip(args, ledger) -> None:
           file=sys.stderr)
 
 
+def _scan_summary(scan: dict, applied: dict) -> str:
+    files = ", ".join(scan["files"]) or "no manifests found"
+    lines = [f"Scanned {len(scan['files'])} file(s) in {scan['elapsed_ms']:.1f} ms "
+             f"(0 LLM tokens): {files}"]
+    for error in scan["errors"]:
+        lines.append(f"  ! could not parse {error['file']}: {error['error']}")
+    verb = "would save" if applied["dry_run"] else "saved"
+    counts = (f"{len(applied['saved'])} {verb}, {len(applied['updated'])} updated, "
+              f"{len(applied['unchanged'])} unchanged")
+    if applied["skipped"]:
+        counts += f", {len(applied['skipped'])} kept as you set them"
+    lines.append(f"{applied['namespace']}: {counts}")
+    values = {item["slot"]: item["value"] for item in scan["facts"]}
+    for mark, key in (("+", "saved"), ("~", "updated")):
+        for slot in applied[key]:
+            lines.append(f"  {mark} {slot} = {values[slot]}")
+    for item in applied["skipped"]:
+        reason = {"user_confirmed": "you confirmed a different value",
+                  "deleted_by_user": "you deleted this slot"}.get(item["reason"], item["reason"])
+        lines.append(f"  = {item['slot']} (unchanged: {reason})")
+    if applied["stale"]:
+        lines.append("  Not found in the project any more: " + ", ".join(applied["stale"])
+                     + f" (remove with memty forget {applied['namespace']} <slot>)")
+    if scan["facts"] and not applied["dry_run"]:
+        lines.append(f'Recall it: memty recall "stack" --namespace {applied["namespace"]}')
+    return "\n".join(lines)
+
+
+def _scan(args, ledger) -> None:
+    from .extraction.project_scan import apply_scan, scan_project
+    try:
+        scan = scan_project(args.path)
+    except ValueError as error:
+        raise SystemExit(str(error))
+    applied = apply_scan(ledger, scan, args.namespace, dry_run=args.dry_run)
+    if args.json:
+        _print({**scan, **applied})
+    else:
+        print(_scan_summary(scan, applied))
+
+
+def _resolve(args, ledger, approve: bool) -> None:
+    ids = args.ids
+    if args.all:
+        ids = [item["id"] for item in ledger.proposals(status="PENDING", limit=1000)]
+    if not ids:
+        raise SystemExit("Nothing to do: pass proposal ids (see memty inbox) or --all.")
+    failed = False
+    for proposal_id in ids:
+        try:
+            result = ledger.resolve_proposal(proposal_id, approve=approve)
+        except ValueError as error:
+            print(f"[{proposal_id}] {error}", file=sys.stderr)
+            failed = True
+            continue
+        if approve:
+            print(f"[{proposal_id}] approved: {result['namespace']}.{result['slot']} = "
+                  f"{json.dumps(result['value'], ensure_ascii=False)} (user-confirmed, v{result['version']})")
+        else:
+            print(f"[{proposal_id}] rejected: {result['namespace']}.{result['slot']} unchanged")
+    if failed:
+        raise SystemExit(1)
+
+
 def main() -> None:
     if len(sys.argv) == 1:
         _welcome()
         return
     if len(sys.argv) > 1 and sys.argv[1] == "daemon":
-        from .daemon import main as daemon_main
+        from .runtime.daemon import main as daemon_main
         sys.argv = [sys.argv[0], *sys.argv[2:]]
         daemon_main()
         return
     if len(sys.argv) > 1 and sys.argv[1] == "mcp":
-        from .mcp_server import main as mcp_main
+        from .integrations.mcp.server import main as mcp_main
         mcp_main()
         return
     if len(sys.argv) > 1 and sys.argv[1] == "vault":
-        from .legacy_vault import main as legacy_vault_main
+        from .legacy.vault_cli import main as legacy_vault_main
         sys.argv = [sys.argv[0], *sys.argv[2:]]
         legacy_vault_main()
         return
     if len(sys.argv) > 1 and sys.argv[1] == "api":
-        from .api import main as api_main
+        from .legacy.api import main as api_main
         api_main()
         return
-    if len(sys.argv) > 1 and sys.argv[1] == "router-mcp":
-        from .router_mcp import main as router_mcp_main
-        router_mcp_main()
-        return
     if len(sys.argv) > 1 and sys.argv[1] == "vault-mcp":
-        from .legacy_mcp import main as legacy_mcp_main
+        from .legacy.vault_mcp import main as legacy_mcp_main
         legacy_mcp_main()
-        return
-    if len(sys.argv) > 1 and sys.argv[1] in {"init", "models", "route", "chat", "integration"}:
-        from memoryport.sdk_cli import main as sdk_main
-        sdk_main()
         return
     parser = argparse.ArgumentParser(
         prog="memty",
-        description="Memty: a user-owned local memory vault for AI assistants",
-        epilog="Also available: init, models, route, chat, integration, vault, api, router-mcp, vault-mcp.",
+        description="Memty: local-first, persistent memory for AI assistants",
+        epilog="Also available: daemon, mcp; and for the older temporal vault: vault, api, vault-mcp.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
     parser.add_argument("--db", default=str(default_vault_path()))
@@ -318,9 +394,36 @@ def main() -> None:
     migrate = commands.add_parser("migrate", help="import facts from a previous Memty temporal vault")
     migrate.add_argument("path")
 
+    scan = commands.add_parser(
+        "scan", aliases=["init"], help="bootstrap project facts from manifests (no model, no network)",
+        description="Read pyproject.toml, package.json, Cargo.toml, Dockerfile and .env.example "
+                    "(key names only) and save baseline facts as EXTRACTED. Facts you confirmed "
+                    "or deleted are never changed.")
+    scan.add_argument("path", nargs="?", default=".")
+    scan.add_argument("--namespace", help="default: project.<folder name>")
+    scan.add_argument("--dry-run", action="store_true", help="show what would be saved")
+    scan.add_argument("--json", action="store_true")
+
+    inbox = commands.add_parser("inbox", help="review facts proposed by connected agents")
+    inbox.add_argument("--all", action="store_true", help="include approved, rejected and superseded")
+    inbox.add_argument("--json", action="store_true")
+
+    for name, verb in (("approve", "approve and save as user-confirmed"), ("reject", "reject")):
+        resolve = commands.add_parser(name, help=f"{verb} inbox proposals")
+        resolve.add_argument("ids", nargs="*", type=int)
+        resolve.add_argument("--all", action="store_true", help=f"{name} every pending proposal")
+
+    receipts = commands.add_parser("receipts", help="list recent context receipts (no values)")
+    receipts.add_argument("--limit", type=int, default=20)
+    receipts.add_argument("--json", action="store_true")
+
+    report = commands.add_parser("report", help="summarize capsules served, facts reused and secrets protected")
+    report.add_argument("--days", type=float, help="only the last N days")
+    report.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
     if args.command == "connect":
-        from .connect import connect_clients
+        from .integrations.mcp.connect import connect_clients
         results = connect_clients(dry_run=args.dry_run, clients=args.client,
                                   open_links=not args.no_open)
         _print(results)
@@ -351,11 +454,46 @@ def main() -> None:
         _print(result)
     elif args.command == "recall":
         try:
-            _print(ledger.context(args.query, provider=args.provider,
-                                  token_budget=args.tokens, namespace=args.namespace))
+            result = ledger.context(args.query, provider=args.provider,
+                                    token_budget=args.tokens, namespace=args.namespace)
         except LocalRoutingRequired as error:
+            log_blocked(ledger, "recall", args.provider, namespace=args.namespace)
             _print(error.as_dict())
             raise SystemExit(2)
+        log_served(ledger, "recall", args.provider, result, namespace=args.namespace)
+        _print(result)
+    elif args.command in {"scan", "init"}:
+        _scan(args, ledger)
+    elif args.command == "inbox":
+        items = ledger.proposals(status=None if args.all else "PENDING", limit=1000)
+        if args.json:
+            _print(items)
+        elif args.all:
+            for item in items:
+                print(f"[{item['id']}] {item['status']:<10} {item['namespace']}.{item['slot']} = "
+                      f"{json.dumps(item['value'], ensure_ascii=False)} ({item['proposed_by']})")
+            if not items:
+                print("No proposals yet.")
+        else:
+            print(format_inbox(items))
+    elif args.command in {"approve", "reject"}:
+        _resolve(args, ledger, approve=args.command == "approve")
+    elif args.command == "receipts":
+        items = ledger.receipts(limit=args.limit)
+        if args.json:
+            _print(items)
+        else:
+            print(format_receipts(items))
+    elif args.command == "report":
+        since = None
+        if args.days is not None:
+            import time
+            since = int((time.time() - args.days * 86400) * 1000)
+        result = ledger.report(since_ms=since)
+        if args.json:
+            _print(result)
+        else:
+            print(format_report(result))
     elif args.command == "forget":
         result = ledger.forget(args.namespace, args.slot, purge_raw=args.purge_raw)
         if result is None:
@@ -390,7 +528,7 @@ def main() -> None:
     elif args.command == "history":
         _print(ledger.history(args.namespace, args.slot))
     elif args.command == "migrate":
-        from .migrate import migrate_from_legacy
+        from .vault.migrate import migrate_from_legacy
         _print(migrate_from_legacy(args.path, ledger))
     else:  # pragma: no cover - argparse enforces the command list
         parser.error("unknown command")

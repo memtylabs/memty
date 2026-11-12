@@ -21,7 +21,7 @@ EXTENSION_NAME = "Memty Bridge"
 
 
 def bundled() -> Path:
-    return Path(str(resources.files("memty") / "browser_extension"))
+    return Path(str(resources.files("memty.integrations.browser") / "extension"))
 
 
 def _is_ours(folder: Path) -> bool:
