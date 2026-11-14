@@ -108,7 +108,10 @@ def ensure_daemon(db):
             _children.append(subprocess.Popen(
                 [sys.executable, "-m", "memty.runtime.daemon", "serve", "--db", str(path)],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=flags, start_new_session=(os.name != "nt"), close_fds=True))
+                # The vault's folder, never the caller's: Windows locks a process's working
+                # directory, which would keep the user's project folder from being deleted.
+                cwd=str(path.parent), creationflags=flags,
+                start_new_session=(os.name != "nt"), close_fds=True))
             next_start = time.monotonic() + 1.0
         time.sleep(0.05)
     raise RuntimeError(f"Could not start memtyd for {path}; run memtyd serve --db <path> to diagnose")

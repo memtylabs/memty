@@ -68,5 +68,42 @@ class DaemonCommandTests(unittest.TestCase):
                 stop(db)
 
 
+class StartupTests(unittest.TestCase):
+    def test_bridge_binds_without_a_reverse_dns_lookup(self):
+        """getfqdn() can stall for 30+ seconds on macOS; the loopback bridge must not call it."""
+        from unittest.mock import patch
+        from memty.integrations.browser.bridge import BridgeServer
+        with patch("socket.getfqdn", side_effect=AssertionError("reverse DNS lookup on bind")):
+            server = BridgeServer(object(), "t" * 43, port=0)
+        try:
+            self.assertEqual(server.server_name, "127.0.0.1")
+            self.assertEqual(server.server_address[0], "127.0.0.1")
+        finally:
+            server.server_close()
+
+    def test_background_processes_never_hold_the_callers_folder(self):
+        """Windows locks a process's working directory: memtyd and the bridge must run from the vault folder."""
+        from unittest.mock import MagicMock, patch
+        from memty.runtime import daemon
+        from memty.integrations.browser import bridge
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "vault" / "ledger.sqlite3"
+            db.parent.mkdir()
+            child = MagicMock()
+            child.poll.return_value = 1
+            child.returncode = 1
+            with patch.object(daemon.subprocess, "Popen", return_value=child) as popen, \
+                    patch.object(daemon, "_ping", return_value=None), \
+                    patch.object(daemon.time, "monotonic", side_effect=[0.0, 0.0, 0.0, 99.0, 99.0]):
+                with self.assertRaises(RuntimeError):
+                    daemon.ensure_daemon(db)
+            self.assertEqual(Path(popen.call_args.kwargs["cwd"]), db.parent.resolve())
+            with patch.object(bridge.subprocess, "Popen", return_value=child) as popen, \
+                    patch.object(bridge, "health", return_value=False):
+                with self.assertRaisesRegex(RuntimeError, "exited with code 1"):
+                    bridge.start_background(db, "local", port=1)
+            self.assertEqual(Path(popen.call_args.kwargs["cwd"]), db.parent)
+
+
 if __name__ == "__main__":
     unittest.main()
