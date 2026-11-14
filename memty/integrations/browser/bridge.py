@@ -684,17 +684,43 @@ def start_background(db, user_id, *, port: int = DEFAULT_PORT, allowed_origins=N
     for origin in allowed_origins or []:
         args += ["--allow-origin", origin]
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     creationflags=flags, start_new_session=(os.name != "nt"), close_fds=True)
-    deadline = time.monotonic() + 15
+    # Keep the bridge's startup errors (the bridge itself never logs bodies or tokens),
+    # so a failed start can say why instead of only "run it in the foreground".
+    log = log_path(db)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log_fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        child = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log_fd,
+                                 creationflags=flags, start_new_session=(os.name != "nt"), close_fds=True)
+    finally:
+        os.close(log_fd)
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         if health(port):
             identity = bridge_identity(db, port)
             if identity and identity.get("user") == user_id:
                 return {"running": True, "port": port}
             raise RuntimeError(f"Port {port} is already used by a different or older Memty bridge.")
+        if child.poll() is not None:  # it exited: no point waiting for the deadline
+            raise RuntimeError(f"memty serve exited with code {child.returncode} before it started on "
+                               f"127.0.0.1:{port}.{_log_tail(log)}")
         time.sleep(0.1)
-    raise RuntimeError(f"memty serve did not start on 127.0.0.1:{port}; run it in the foreground to see why")
+    raise RuntimeError(f"memty serve did not start on 127.0.0.1:{port} within 30 seconds.{_log_tail(log)}")
+
+
+def log_path(db: str | Path) -> Path:
+    db = Path(db).expanduser()
+    return db.with_name(db.name + ".web-bridge.log")
+
+
+def _log_tail(path: Path, lines: int = 15) -> str:
+    try:
+        tail = path.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-lines:]
+    except OSError:
+        tail = []
+    if not tail:
+        return " Run `memty serve` in the foreground to see why."
+    return f" Its last output ({path}):\n" + "\n".join(tail)
 
 
 def stop_background(db) -> dict:

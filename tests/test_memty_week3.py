@@ -706,12 +706,20 @@ class ClipTests(unittest.TestCase):
 
     def test_copy_text_uses_platform_tool(self):
         from memty.integrations import clipboard
-        with patch("memty.integrations.clipboard.subprocess.run") as run:
+        # Pretend a Linux clipboard tool is installed: headless CI machines have none.
+        with patch("memty.integrations.clipboard.subprocess.run") as run, \
+                patch("memty.integrations.clipboard.shutil.which", return_value="/usr/bin/wl-copy"):
             clipboard.copy_text("capsule ✓")
         argv, kwargs = run.call_args[0][0], run.call_args[1]
         if sys.platform == "win32":
             self.assertEqual(argv, ["clip"])
             self.assertEqual(kwargs["input"], "capsule ✓".encode("utf-16"))
+        elif sys.platform == "darwin":
+            self.assertEqual(argv, ["pbcopy"])
+            self.assertEqual(kwargs["input"], "capsule ✓".encode("utf-8"))
+        else:
+            self.assertEqual(argv, ["wl-copy"])
+            self.assertEqual(kwargs["input"], "capsule ✓".encode("utf-8"))
         self.assertTrue(kwargs["check"])
         with patch("memty.integrations.clipboard._command", return_value=None):
             with self.assertRaises(RuntimeError):
