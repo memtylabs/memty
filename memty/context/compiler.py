@@ -8,6 +8,7 @@ block within the token budget.  Every fact passes through the privacy gate in
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from typing import TYPE_CHECKING, Any
 from xml.sax.saxutils import escape
@@ -17,6 +18,22 @@ from ..vault.tokens import estimate_tokens, truncate_tokens
 from ..vault.vectors import cosine, unpack_vector
 from .privacy import LocalRoutingRequired, needs_redaction, provider_allowed, provider_flags
 from .render import slot_label
+
+# A stored value is data, never framing: it must not close or forge the capsule's
+# own markers, or text saved from one chat could steer the next assistant.
+_XML_FRAME = re.compile(r"<(?=\s*/?\s*(?:memty_state|slots|summary|semantic)\b)", re.I)
+_PLAIN_FRAME = re.compile(r"\[(?=\s*/?\s*memty\b)", re.I)
+_ESCAPED_LT = chr(92) + "u003c"  # backslash-u003c, the JSON escape for "<"
+
+
+def _json_value(value: str) -> str:
+    # The JSON escape for "<" still reads as "<" to a JSON parser, but is no longer a tag.
+    return _XML_FRAME.sub(lambda _match: _ESCAPED_LT, json.dumps(value, ensure_ascii=False))
+
+
+def _plain_value(value: str) -> str:
+    return _PLAIN_FRAME.sub("(", " ".join(str(value).split()))
+
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only for type checkers
     from ..vault.ledger import MemtyLedger
@@ -145,7 +162,7 @@ class ContextCompiler:
         included: list[str] = []
         redacted = 0
         for fact, value, private in allowed:
-            line = f"{len(lines) + 1}. {slot_label(fact['slot'])}: {' '.join(value.split())}"
+            line = f"{len(lines) + 1}. {slot_label(fact['slot'])}: {_plain_value(value)}"
             candidate = "\n".join([header, *lines, line, footer])
             if estimate_tokens(candidate) > token_budget:
                 break
@@ -217,7 +234,7 @@ class ContextCompiler:
             return placeholder
 
         def line_for(fact: dict[str, Any], value: str) -> str:
-            return f"{fact['namespace']}.{fact['slot']}={json.dumps(value, ensure_ascii=False)}"
+            return f"{fact['namespace']}.{fact['slot']}={_json_value(value)}"
 
         def probe_line(fact: dict[str, Any]) -> str:
             # Use a placeholder-shaped value while checking the budget so we do

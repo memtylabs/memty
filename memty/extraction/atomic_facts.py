@@ -17,6 +17,7 @@ import os
 import re
 from urllib import request as urlrequest
 
+from ..vault.credentials import looks_like_credential
 from ..vault.ledger import FACT_TOKEN_LIMIT
 from ..vault.tokens import estimate_tokens, truncate_tokens
 
@@ -431,6 +432,14 @@ def extract_ollama(text: str, model: str, *, host: str = "http://127.0.0.1:11434
                            max_facts=max(0, min(int(max_facts), MAX_FACTS)))[0]
 
 
+def _flag_credentials(facts: list[dict]) -> list[dict]:
+    """Mark proposals holding a key or password; the ledger stores them as SECRET too."""
+    for fact in facts:
+        if looks_like_credential(fact.get("value", "")):
+            fact["sensitivity"] = "SECRET"
+    return facts
+
+
 def extract_facts(text: str, *, max_facts: int = MAX_FACTS) -> dict:
     """Return ``{"facts": [...], "method": "ollama" | "heuristic"}``."""
     model = os.getenv("MEMTY_OLLAMA_MODEL", "").strip()
@@ -439,14 +448,14 @@ def extract_facts(text: str, *, max_facts: int = MAX_FACTS) -> dict:
             facts, warnings = _extract_ollama(text, model, max_facts=max(0, min(int(max_facts), MAX_FACTS)),
                                               host=os.getenv("MEMTY_OLLAMA_HOST", "http://127.0.0.1:11434"))
             if facts:
-                result = {"facts": facts, "method": "ollama"}
+                result = {"facts": _flag_credentials(facts), "method": "ollama"}
                 if warnings:
                     result["warnings"] = warnings
                 return result
         except (OSError, ValueError, KeyError, TypeError):
             pass  # Ollama not running or returned junk: fall back to heuristics.
     facts, warnings = _extract_heuristic(text, max(0, min(int(max_facts), MAX_FACTS)))
-    result = {"facts": facts, "method": "heuristic"}
+    result = {"facts": _flag_credentials(facts), "method": "heuristic"}
     if warnings:
         result["warnings"] = warnings
     return result

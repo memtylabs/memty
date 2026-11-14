@@ -4,6 +4,13 @@ All notable changes to the `memty` package. This project follows [Semantic Versi
 
 ## Unreleased
 
+- **Security fixes** (found by the new adversarial suite, `tests/test_memty_security.py`):
+  - The browser bridge no longer accepts a local provider name (`provider=ollama`, `local`, ...). Before, any caller with the pairing token could ask for a "local" capsule and receive SECRET facts and unredacted CONFIDENTIAL values. It now answers 400.
+  - Credentials are always stored as SECRET: API keys (OpenAI, Anthropic, GitHub, GitLab, AWS, Slack, Google, Stripe, Hugging Face), JWTs, private-key headers, passwords in URLs, and `password: ...` style lines. This applies to every write path (CLI, browser saves, reviewed contexts, MCP, agent proposals). Extraction marks these proposals with `"sensitivity": "SECRET"`.
+  - The browser can no longer make a SECRET fact public, and saves from the browser or MCP never lower a slot's sensitivity. Making a secret public now needs the terminal.
+  - `forget` now also removes the value from disk: deleted SQLite pages are zeroed (`secure_delete`), the search index is compacted, and the WAL is checkpointed. An archived source stays linked to its slot when the slot is updated, so `forget --purge-raw` can still find and delete it.
+  - Stored values can no longer close or forge capsule markers (`</memty_state>`, `<slots>`, `[/Memty]`, ...), so text saved from one chat can't inject instructions into the next assistant's context.
+
 - **Memty is a memory layer, not a model router.** Removed:
   - the model-routing SDK and multi-provider chat client: `memty models`, `route`, `chat`, `integration`, `router-mcp`, the `memty-router-mcp` script, and `load_client`, `Memty`, the provider adapters and `SmartRouter` from `from memty import ...`
   - the `nexorai` alias package

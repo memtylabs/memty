@@ -487,6 +487,7 @@ $ memty approve 1
                 <li>Host checks block DNS-rebinding attacks. Writes must be JSON, which blocks form-based attacks.</li>
                 <li>Only the extension's background worker holds the token. Scripts inside chat pages never see it.</li>
                 <li>The site is identified from the tab's real address (ChatGPT → <code>openai</code>), so a page can't pretend to be trusted.</li>
+                <li>A browser can't claim to be a local model to get SECRET facts, and can't make a SECRET fact public. Only your terminal can.</li>
               </ul>
             </div>
             <div class="card">
@@ -497,6 +498,35 @@ $ memty approve 1
                 <li><b>To revoke access,</b> run <code>memty serve --new-token</code> and restart the bridge. Every extension must pair again.</li>
                 <li><b>To erase everything,</b> delete the <code>~/.memty</code> folder.</li>
               </ul>
+            </div>
+          </div>
+
+          <p class="subhead">Don't trust us. Attack it.</p>
+          <div class="grid grid-2 spaced">
+            <div class="card">
+              <h3>61 adversarial tests</h3>
+              <p><code>tests/test_memty_security.py</code> tries to break every promise on this page. A failing test means a vulnerability.</p>
+              <ul class="checks">
+                <li><b>Privacy gate:</b> SECRET facts never reach any cloud provider, for any question, including look-alike "local" names and Unicode tricks.</li>
+                <li><b>Credentials:</b> API keys, tokens, private keys and <code>password: …</code> lines are always stored as SECRET, however they're saved.</li>
+                <li><b>Forget:</b> a forgotten value is gone from every table, the search index, and the raw bytes of the file on disk.</li>
+                <li><b>Browser bridge:</b> DNS rebinding, web-page origins, forged tokens, a second extension pairing, malformed requests.</li>
+                <li><b>Daemon and MCP:</b> wrong tokens, internal methods, agents trying to overwrite or downgrade your facts.</li>
+                <li><b>Injection:</b> SQL, search syntax, and stored text that tries to forge Memty's context markers.</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Run them yourself</h3>
+              <p>From a clone of the repository:</p>
+              <div class="code-card">
+                <div class="code-head"><span>Terminal</span><button class="copy-button" type="button" data-copy="git clone https://github.com/memtylabs/memty.git &amp;&amp; cd memty &amp;&amp; pip install -e . &amp;&amp; python -m unittest tests.test_memty_security -v">Copy</button></div>
+                <pre><code>git clone https://github.com/memtylabs/memty.git
+cd memty
+pip install -e .
+python -m unittest tests.test_memty_security -v</code></pre>
+              </div>
+              <p>Expect <code>Ran 61 tests … OK</code>. To attack a single area, name its class, for example <code>tests.test_memty_security.BridgeSecurityTests</code>.</p>
+              <p><a href="https://github.com/memtylabs/memty/blob/main/docs/SECURITY_TESTING.md" target="_blank" rel="noreferrer">Every command, plus attacks to run by hand with <code>curl</code> →</a></p>
             </div>
           </div>
         </section>
@@ -514,7 +544,9 @@ $ memty approve 1
               <tbody>
                 <tr><td>No contradictions</td><td>One value per <code>namespace.slot</code>. A new value supersedes the old one, which moves to an audit table with its version number.</td></tr>
                 <tr><td>Facts stay small</td><td>Values over 40 tokens are rejected, so each fact is one clear statement.</td></tr>
-                <tr><td>Deleting is permanent</td><td>Forgetting a fact tombstones it and purges its value and history.</td></tr>
+                <tr><td>Deleting is permanent</td><td>Forgetting a fact tombstones it and purges its value and history. Deleted pages are zeroed, the search index is compacted, and the write-ahead log is checkpointed, so the value can't be recovered from the file.</td></tr>
+                <tr><td>Keys are never shared</td><td>Values that look like credentials (API keys, tokens, private keys, <code>password: …</code>) are stored as SECRET, whatever level was asked for.</td></tr>
+                <tr><td>Saved text stays data</td><td>A stored value can't close or forge the capsule's own markers, so text saved from one chat can't inject instructions into the next.</td></tr>
                 <tr><td>Automation can't overrule you</td><td>Automatically extracted facts can't overwrite facts you confirmed, and can't restore facts you deleted.</td></tr>
                 <tr><td>Agents ask first</td><td>An agent's change to an existing fact goes to the inbox, never straight into the vault. Approving keeps the fact's privacy level and provider rules.</td></tr>
                 <tr><td>One writer</td><td>All tools go through one memtyd per vault, which handles one request at a time, so concurrent tools can't corrupt or overwrite each other.</td></tr>
