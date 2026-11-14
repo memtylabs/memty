@@ -2,7 +2,16 @@
 
 All notable changes to the `memty` package. This project follows [Semantic Versioning](https://semver.org/); while it is in 0.x, minor versions may change commands and options.
 
-## Unreleased
+## 0.2.1 (2026-11-14)
+
+A security release. Upgrade with `pip install --upgrade memty`, then run `memtyd stop` once so the background daemon restarts with the new code.
+
+- **Verified releases.** Releases are now built and published by GitHub Actions through PyPI Trusted Publishing, with provenance attestations linking each file to the commit and workflow that built it. There's no upload token anywhere. Before publishing, the tests run on Linux, Windows and macOS. See `SECURITY.md` for how to verify a release and report a vulnerability.
+- **Fixed on macOS:** the browser bridge could hang for 30+ seconds before listening, because Python's HTTP server did a reverse-DNS lookup of `127.0.0.1`. It now starts immediately.
+- **Fixed on Windows:** `memtyd` and the background bridge kept the folder they were started from locked, so a project folder could not be deleted or renamed while they ran. They now run from the drive root.
+- **Fixed:** facts from one browser Save could be pasted in alphabetical order instead of the order you saved them, when they were written within the same millisecond.
+- When the background bridge fails to start, Memty now stops waiting at once and shows the bridge's own error output (kept in `<vault>.web-bridge.log`), instead of only "run it in the foreground".
+- The PyPI page has been rewritten with the Memty logo, working links and the new security features.
 
 - **Security fixes** (found by the new adversarial suite, `tests/test_memty_security.py`):
   - The browser bridge no longer accepts a local provider name (`provider=ollama`, `local`, ...). Before, any caller with the pairing token could ask for a "local" capsule and receive SECRET facts and unredacted CONFIDENTIAL values. It now answers 400.
