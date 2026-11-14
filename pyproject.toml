@@ -35,6 +35,7 @@ Repository = "https://github.com/memtylabs/memty"
 Documentation = "https://github.com/memtylabs/memty/tree/main/memty#readme"
 Issues = "https://github.com/memtylabs/memty/issues"
 Changelog = "https://github.com/memtylabs/memty/blob/main/memty/CHANGELOG.md"
+Security = "https://github.com/memtylabs/memty/blob/main/SECURITY.md"
 
 [project.optional-dependencies]
 mongodb = ["pymongo>=4.6"]
