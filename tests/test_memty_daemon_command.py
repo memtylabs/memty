@@ -82,7 +82,7 @@ class StartupTests(unittest.TestCase):
             server.server_close()
 
     def test_background_processes_never_hold_the_callers_folder(self):
-        """Windows locks a process's working directory: memtyd and the bridge must run from the vault folder."""
+        """Windows locks a process's working directory: memtyd and the bridge run from the drive root."""
         from unittest.mock import MagicMock, patch
         from memty.runtime import daemon
         from memty.integrations.browser import bridge
@@ -97,12 +97,30 @@ class StartupTests(unittest.TestCase):
                     patch.object(daemon.time, "monotonic", side_effect=[0.0, 0.0, 0.0, 99.0, 99.0]):
                 with self.assertRaises(RuntimeError):
                     daemon.ensure_daemon(db)
-            self.assertEqual(Path(popen.call_args.kwargs["cwd"]), db.parent.resolve())
+            self.assertEqual(Path(popen.call_args.kwargs["cwd"]), Path(db.resolve().anchor))
             with patch.object(bridge.subprocess, "Popen", return_value=child) as popen, \
                     patch.object(bridge, "health", return_value=False):
                 with self.assertRaisesRegex(RuntimeError, "exited with code 1"):
                     bridge.start_background(db, "local", port=1)
-            self.assertEqual(Path(popen.call_args.kwargs["cwd"]), db.parent)
+            self.assertEqual(Path(popen.call_args.kwargs["cwd"]), Path(db.resolve().anchor))
+
+
+class SaveOrderTests(unittest.TestCase):
+    def test_facts_saved_in_the_same_millisecond_keep_their_order(self):
+        """A fast machine saves a whole browser Save within one millisecond; order must survive."""
+        from unittest.mock import patch
+        from memty.vault import ledger as ledger_module
+        from memty.vault.ledger import MemtyLedger
+        from memty.integrations.browser.bridge import latest_batch
+        with tempfile.TemporaryDirectory() as tmp, MemtyLedger(Path(tmp) / "v.sqlite3") as ledger:
+            ledger.record("work", "zebra", "first older fact")
+            with patch.object(ledger_module, "_utc_now_ms", return_value=1_800_000_000_000):
+                for slot in ["zulu", "alpha", "mike"]:  # deliberately not alphabetical
+                    ledger.record("work", slot, slot.upper(), source_id="save_" + "a" * 16)
+            facts = ledger.list(namespace="work")
+            stamps = sorted(f["updated_at"] for f in facts)
+            self.assertEqual(len(set(stamps)), len(stamps))  # strictly increasing
+            self.assertEqual([f["slot"] for f in latest_batch(facts)], ["zulu", "alpha", "mike"])
 
 
 if __name__ == "__main__":

@@ -698,10 +698,10 @@ def start_background(db, user_id, *, port: int = DEFAULT_PORT, allowed_origins=N
     log.parent.mkdir(parents=True, exist_ok=True)
     log_fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        # Run from the vault's folder: on Windows a process's working directory is locked,
-        # so inheriting the caller's (a project folder) would block deleting or renaming it.
+        # Windows locks a process's working directory, so the bridge must not sit in the
+        # caller's project folder or the vault folder (both may be deleted): use the drive root.
         child = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log_fd,
-                                 cwd=str(log.parent), creationflags=flags,
+                                 cwd=log.resolve().anchor or os.sep, creationflags=flags,
                                  start_new_session=(os.name != "nt"), close_fds=True)
     finally:
         os.close(log_fd)
