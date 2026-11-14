@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memty"
-version = "0.2.0"
-description = "User-owned, local-first memory for AI assistants: one private vault for Claude, ChatGPT, Gemini, Perplexity, Cursor, and any MCP client"
+version = "0.2.1"
+description = "Your AI memory, owned by you: one private, local vault for ChatGPT, Claude, Gemini, Claude Code, Codex, Cursor and any MCP client"
 readme = "memty/README.md"
 requires-python = ">=3.10"
 license = "MIT"
