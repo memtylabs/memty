@@ -238,6 +238,14 @@ class BridgeServer(ThreadingHTTPServer):
         # Never configurable: the bridge must not be reachable from the network.
         super().__init__(("127.0.0.1", port), BridgeHandler)
 
+    def server_bind(self) -> None:
+        # HTTPServer.server_bind calls socket.getfqdn(), a reverse-DNS lookup that can
+        # stall for 30+ seconds (seen on macOS). A loopback-only bridge needs no hostname.
+        import socketserver
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "127.0.0.1"
+        self.server_port = self.server_address[1]
+
     @property
     def port(self) -> int:
         return self.server_address[1]
@@ -690,8 +698,11 @@ def start_background(db, user_id, *, port: int = DEFAULT_PORT, allowed_origins=N
     log.parent.mkdir(parents=True, exist_ok=True)
     log_fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
+        # Run from the vault's folder: on Windows a process's working directory is locked,
+        # so inheriting the caller's (a project folder) would block deleting or renaming it.
         child = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log_fd,
-                                 creationflags=flags, start_new_session=(os.name != "nt"), close_fds=True)
+                                 cwd=str(log.parent), creationflags=flags,
+                                 start_new_session=(os.name != "nt"), close_fds=True)
     finally:
         os.close(log_fd)
     deadline = time.monotonic() + 30
