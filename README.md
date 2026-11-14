@@ -130,6 +130,24 @@ How the local bridge is protected:
 - Every request needs a token.
 - Web pages are refused, and only extensions you approved can connect (`memty pair` adds another browser).
 - It checks the `Host` header, which blocks DNS rebinding.
+- A browser can't claim to be a local model to get SECRET facts, and can't make a SECRET fact public.
+
+Built-in protections for your data:
+
+- **Credentials are always SECRET.** API keys, tokens, private keys and `password: ...` lines are stored as SECRET however they are saved, so they never reach a cloud AI.
+- **Forget means forget.** A forgotten value is erased from the vault file on disk, including the search index and the write-ahead log.
+- **Saved text can't hijack a chat.** A stored value can't close or forge Memty's context markers.
+
+### Test the security yourself
+
+`tests/test_memty_security.py` contains 61 adversarial tests. Each one attacks a promise above: the privacy gate, the browser bridge, the daemon, MCP, credential handling, forgetting, and injection. Run them from a clone:
+
+```shell
+pip install -e .
+python -m unittest tests.test_memty_security -v
+```
+
+[docs/SECURITY_TESTING.md](docs/SECURITY_TESTING.md) has every command, including step-by-step attacks you can run by hand against a throwaway vault with `curl`.
 
 The vault file itself is **not encrypted**, so it relies on your computer account's protection. Keep it out of synced folders such as OneDrive or Dropbox unless you want it uploaded.
 

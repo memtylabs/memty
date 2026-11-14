@@ -41,7 +41,8 @@ from urllib.parse import parse_qs, urlsplit
 from ...context.privacy import LocalRoutingRequired
 from ...context.render import render_plain_with_count, slot_label
 from ...extraction.atomic_facts import MAX_INPUT_CHARS, extract_facts
-from ...vault.ledger import LockedSlot, TombstonedSlot, _CONTEXT_SLOT_SUFFIX, _normalize_slot
+from ...vault.ledger import (LOCAL_PROVIDERS, LockedSlot, TombstonedSlot, _CONTEXT_SLOT_SUFFIX,
+                             _normalize_slot)
 from ...vault.tokens import estimate_tokens
 from ...trust.receipts import log_blocked, log_served
 
@@ -119,6 +120,20 @@ def context_preview(facts: list[dict], provider: str) -> str:
             value = value[:100].rsplit(" ", 1)[0] + "…"
         return f"{slot_label(fact['slot'])}: {value}"
     return "Private context"
+
+
+def web_provider(value) -> str:
+    """The provider name a browser caller asked for, which can never be a local model.
+
+    The capsule goes into a cloud chat box, so letting the caller say "ollama"
+    would switch the privacy gate to local mode and release SECRET facts.
+    """
+    provider = str(value or "").strip() or "web"
+    if not re.fullmatch(r"[a-zA-Z0-9_.-]{1,80}", provider):
+        raise ValueError("invalid provider")
+    if provider.casefold() in LOCAL_PROVIDERS:
+        raise ValueError("a web assistant cannot use a local provider name")
+    return provider
 
 
 def token_path(db: str | Path) -> Path:
@@ -422,7 +437,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         limit = 2000 if context_id else 600
         if not 1 <= tokens <= limit:
             raise ValueError(f"tokens must be between 1 and {limit}")
-        provider = query.get("provider", "web").strip() or "web"
+        provider = web_provider(query.get("provider"))
         style = query.get("format", "text")
         if style not in {"text", "xml"}:
             raise ValueError("format must be text or xml")
@@ -498,9 +513,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def _contexts(self, query: dict) -> None:
         namespace = query.get("namespace", "").strip() or None
-        provider = query.get("provider", "web").strip() or "web"
-        if not re.fullmatch(r"[a-zA-Z0-9_.-]{1,80}", provider):
-            raise ValueError("invalid provider")
+        provider = web_provider(query.get("provider"))
         groups = context_groups(self.server.ledger.list(namespace=namespace))
         self._send(HTTPStatus.OK, {"contexts": [
             {"id": group["id"], "namespace": group["namespace"], "updated_at": group["updated_at"],
@@ -545,6 +558,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
             if current is None:
                 raise ValueError("value is required")
             value = current["value"]  # rename or privacy change: keep the stored value server-side
+        if "private" in body and not body["private"] and current and current["sensitivity"] == "SECRET":
+            # Declassifying a secret from the browser would let the browser read it back.
+            raise ValueError("a secret can only be made public from the terminal: memty remember")
         if "private" in body:
             sensitivity = ((current["sensitivity"] if current and current["sensitivity"] in PRIVATE else "CONFIDENTIAL")
                            if body["private"] else "PUBLIC")
@@ -588,8 +604,11 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if separate:
             self._send(HTTPStatus.OK, self.server.ledger.record_context(namespace, facts))
             return
-        existing = ({f["slot"]: f["sensitivity"] for f in self.server.ledger.list(namespace=namespace)}
-                    if confirmed else {})
+        # A save never lowers a slot's sensitivity: a new value for a private slot stays private.
+        try:
+            existing = {f["slot"]: f["sensitivity"] for f in self.server.ledger.list(namespace=namespace)}
+        except ValueError:
+            existing = {}  # invalid namespace: each fact reports the error below
         # Every fact from one Save click shares a batch id, so the capsule can hand
         # the chat just the latest save instead of mixing it with older ones.
         batch = SAVE_BATCH_PREFIX + secrets.token_hex(8)
@@ -604,8 +623,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
                         namespace, slot, value, confidence=1.0, verification_state="USER_CONFIRMED",
                         sensitivity=existing.get(normalized, "PUBLIC"), source_id=batch)
                 else:
-                    record = self.server.ledger.record(namespace, slot, value, confidence=0.7,
-                                                       verification_state="EXTRACTED", source_id=batch)
+                    record = self.server.ledger.record(
+                        namespace, slot, value, confidence=0.7, verification_state="EXTRACTED",
+                        sensitivity=existing.get(_normalize_slot(slot), "PUBLIC"), source_id=batch)
                 saved.append({"slot": record["slot"], "version": record.get("version")})
             except (LockedSlot, TombstonedSlot) as error:
                 skipped.append({"slot": slot, "reason": type(error).__name__, "message": str(error)})

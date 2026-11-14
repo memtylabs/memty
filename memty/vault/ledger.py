@@ -32,6 +32,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterator
 
+from .credentials import looks_like_credential
 from .tokens import estimate_tokens, truncate_tokens
 from .vectors import pack_vector, unpack_vector
 
@@ -140,6 +141,8 @@ class MemtyLedger:
         connection.execute("PRAGMA synchronous=NORMAL")
         connection.execute("PRAGMA temp_store=MEMORY")
         connection.execute("PRAGMA foreign_keys=ON")
+        # Forget means forget: overwrite deleted content instead of leaving it in free pages.
+        connection.execute("PRAGMA secure_delete=ON")
         with self._connections_lock:
             self._connections.append(connection)
         return connection
@@ -401,6 +404,16 @@ class MemtyLedger:
               row["version"], row["verification_state"], row["sensitivity"],
               row["updated_at"], valid_to, valid_to))
 
+    def _drop_unused_raw(self, db: sqlite3.Connection, raw_id: str, *, except_id: str) -> None:
+        """Delete an archived source once no other fact points at it."""
+        if not str(raw_id).startswith("raw_"):
+            return
+        still_used = db.execute(
+            "SELECT 1 FROM atomic_facts WHERE user_id=? AND source_id=? AND id<>? LIMIT 1",
+            (self.user_id, raw_id, except_id)).fetchone()
+        if not still_used:
+            db.execute("DELETE FROM raw_drilldown WHERE user_id=? AND id=?", (self.user_id, raw_id))
+
     def record(self, namespace: str, slot: str, value: str, *, confidence: float = 1.0,
                verification_state: str = "EXTRACTED", sensitivity: str = "PUBLIC",
                allowed_providers: list[str] | None = None, blocked_providers: list[str] | None = None,
@@ -435,6 +448,8 @@ class MemtyLedger:
         sensitivity = {"PERSONAL": "INTERNAL"}.get(sensitivity, sensitivity)
         if sensitivity not in _SENSITIVITY_LEVELS:
             raise ValueError("sensitivity must be PUBLIC, INTERNAL, CONFIDENTIAL or SECRET")
+        if looks_like_credential(value):
+            sensitivity = "SECRET"  # a pasted key or password never becomes shareable
 
         allowed = sorted({str(item).casefold() for item in (allowed_providers or [])})
         blocked = sorted({str(item).casefold() for item in (blocked_providers or [])})
@@ -477,6 +492,10 @@ class MemtyLedger:
                 if same:
                     db.execute("ROLLBACK")
                     return self._fact(existing)
+                if source_id is None and str(existing["source_id"] or "").startswith("raw_"):
+                    source_id = existing["source_id"]  # keep the archived source attached
+                elif existing["source_id"] and existing["source_id"] != source_id:
+                    self._drop_unused_raw(db, existing["source_id"], except_id=existing["id"])
                 self._audit(db, existing, valid_to=now)
                 db.execute("""
                     UPDATE atomic_facts
@@ -556,7 +575,7 @@ class MemtyLedger:
                             blocked_providers,ephemeral_redaction,created_at,updated_at
                         ) VALUES(?,?,?,?,?,1.0,'USER_CONFIRMED',?,?,1,0,?,?,?,?,?)
                     """, ("mem_" + uuid.uuid4().hex, self.user_id, namespace, actual_slot, value,
-                          policy.get("sensitivity", "PUBLIC"), batch,
+                          "SECRET" if looks_like_credential(value) else policy.get("sensitivity", "PUBLIC"), batch,
                           json.dumps(sorted(allowed)) if allowed is not None else "[]",
                           json.dumps(sorted(policy.get("blocked", ()))),
                           int(policy.get("ephemeral", False)), now, now))
@@ -695,12 +714,7 @@ class MemtyLedger:
                        (self.user_id, row["namespace"], row["slot"]))
             source_id = row["source_id"]
             if purge_raw and source_id:
-                still_used = db.execute(
-                    "SELECT 1 FROM atomic_facts WHERE user_id=? AND source_id=? AND id<>? LIMIT 1",
-                    (self.user_id, source_id, current["id"])).fetchone()
-                if not still_used:
-                    db.execute("DELETE FROM raw_drilldown WHERE user_id=? AND id=?",
-                               (self.user_id, source_id))
+                self._drop_unused_raw(db, source_id, except_id=current["id"])
                 source_id = None
             db.execute("""
                 UPDATE atomic_facts
@@ -708,7 +722,21 @@ class MemtyLedger:
                  WHERE user_id=? AND id=?
             """, (int(row["version"]) + 1, source_id, now, self.user_id, current["id"]))
             db.execute("COMMIT")
+            self._scrub(db)
         return self.get(current["id"])
+
+    def _scrub(self, db: sqlite3.Connection) -> None:
+        """Remove a forgotten value's leftovers from the search index and the WAL.
+
+        FTS5 keeps deleted terms in older index segments until they are merged,
+        and the write-ahead log keeps old page images until a checkpoint.
+        """
+        try:
+            if self._fts:
+                db.execute("INSERT INTO atomic_facts_fts(atomic_facts_fts) VALUES('optimize')")
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.Error:
+            pass  # another connection holds the WAL; the next checkpoint finishes the job
 
     def history(self, namespace: str, slot: str) -> list[dict[str, Any]]:
         """Return superseded versions plus the current state for one slot."""
@@ -1010,6 +1038,8 @@ class MemtyLedger:
         sensitivity = str(sensitivity).upper()
         if sensitivity not in _SENSITIVITY_LEVELS:
             raise ValueError("sensitivity must be PUBLIC, INTERNAL, CONFIDENTIAL or SECRET")
+        if looks_like_credential(value):
+            sensitivity = "SECRET"
         proposed_by = _client_name(proposed_by, "agent")
         reason = " ".join(str(reason or "").split())[:200]
         base = {"namespace": namespace, "slot": slot, "proposed_by": proposed_by}

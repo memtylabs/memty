@@ -5,7 +5,8 @@ import os
 
 from ...context.privacy import LocalRoutingRequired
 from ...vault.paths import default_user_id, default_vault_path
-from ...vault.ledger import LOCAL_PROVIDERS, LockedSlot, MemtyLedger, TombstonedSlot
+from ...vault.ledger import (LOCAL_PROVIDERS, LockedSlot, MemtyLedger, TombstonedSlot,
+                             _SENSITIVITY_RANK)
 from ...trust.receipts import log_blocked, log_served
 
 try:  # module level so FastMCP can resolve the ``ctx: Context`` annotation
@@ -41,6 +42,18 @@ def create_server(ledger: MemtyLedger):
         except Exception:  # no ctx, outside a request, or a client that sent no clientInfo
             return None
 
+    def kept_sensitivity(namespace: str, slot: str, requested: str) -> str:
+        """An agent's write never lowers a slot's sensitivity (only the user's terminal can)."""
+        requested = str(requested or "PUBLIC").upper()
+        try:
+            current = ledger.find(namespace, slot)
+        except ValueError:
+            return requested  # invalid names: record() reports the error
+        if current and not current["tombstone"] and (
+                _SENSITIVITY_RANK.get(current["sensitivity"], 0) > _SENSITIVITY_RANK.get(requested, 0)):
+            return current["sensitivity"]
+        return requested
+
     def capsule(namespace: str, query: str = "", client: str | None = None) -> dict:
         try:
             result = ledger.context(query, provider=provider, namespace=namespace,
@@ -74,7 +87,7 @@ def create_server(ledger: MemtyLedger):
             for key, item in set_slots.items():
                 try:
                     record = ledger.record(namespace, key, item, verification_state="USER_CONFIRMED",
-                                           sensitivity=sensitivity)
+                                           sensitivity=kept_sensitivity(namespace, key, sensitivity))
                     saved.append(record["slot"])
                 except (LockedSlot, TombstonedSlot, ValueError) as error:
                     skipped.append({"slot": key, "reason": type(error).__name__})
@@ -83,7 +96,7 @@ def create_server(ledger: MemtyLedger):
             return capsule(namespace, query, client)
         if action == "remember":
             record = ledger.record(namespace, slot, value, verification_state="USER_CONFIRMED",
-                                   sensitivity=sensitivity)
+                                   sensitivity=kept_sensitivity(namespace, slot, sensitivity))
             return {"status": "saved", "namespace": record["namespace"], "slot": record["slot"]}
         if action == "forget":
             result = ledger.forget(namespace, slot, purge_raw=True)
