@@ -463,6 +463,12 @@ class MemtyLedger:
         now = _utc_now_ms()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            # Strictly increasing save times: several facts saved in the same millisecond
+            # (one browser Save on a fast machine) must still keep the order they were saved in.
+            latest = db.execute("SELECT MAX(updated_at) FROM atomic_facts WHERE user_id=?",
+                                (self.user_id,)).fetchone()[0]
+            if latest is not None and now <= int(latest):
+                now = int(latest) + 1
             existing = db.execute(
                 "SELECT * FROM atomic_facts WHERE user_id=? AND namespace=? AND slot=?",
                 (self.user_id, namespace, slot)).fetchone()
