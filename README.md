@@ -11,7 +11,7 @@ One private, local memory vault for every AI assistant you use: ChatGPT, Claude,
 
 [![PyPI](https://img.shields.io/pypi/v/memty.svg)](https://pypi.org/project/memty/)
 [![Python](https://img.shields.io/pypi/pyversions/memty.svg)](https://pypi.org/project/memty/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: FSL-1.1-ALv2](https://img.shields.io/badge/license-FSL--1.1--ALv2-blue.svg)](LICENSING.md)
 
 [Website](https://memtylabs.github.io/memty/) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Package docs](memty/README.md) · [Changelog](memty/CHANGELOG.md)
 
@@ -299,4 +299,4 @@ Start with the [contributor guide](CONTRIBUTING.md), pick the guide for the area
 
 ## 📄 License
 
-[MIT](LICENSE)
+Memty is Fair Source software under the [Functional Source License 1.1, ALv2 Future License](LICENSE) (`FSL-1.1-ALv2`). You can use, change and share it for anything except a competing commercial product, and each release becomes Apache 2.0 two years after it ships. Versions 0.2.1 and earlier remain MIT. See [LICENSING.md](LICENSING.md) for a plain-language summary.

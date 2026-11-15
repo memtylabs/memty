@@ -68,3 +68,6 @@ For browser changes, state which websites and browsers you actually checked; loc
 
 Use relative links for files inside the repository. Keep examples runnable and use placeholders for secrets. When reporting a problem, never attach credentials, session cookies, full private prompts, or user memory contents; reduce logs to the smallest sanitized excerpt that demonstrates the failure.
 
+## License of contributions
+
+By submitting a contribution, you agree that it is licensed under the project's license, [FSL-1.1-ALv2](LICENSE), including its future Apache 2.0 grant. See [LICENSING.md](LICENSING.md).
