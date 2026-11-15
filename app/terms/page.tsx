@@ -5,11 +5,10 @@ import { GITHUB_URL } from '@/components/site/brand';
 
 export const metadata: Metadata = {
   title: 'Terms of use | Memty',
-  description: 'Terms for using the Memty software, this website and the demo workspace.',
+  description: 'Terms for using the Memty open-source software, this website and the demo workspace.',
 };
 
 const LICENSE_URL = `${GITHUB_URL}/blob/main/LICENSE`;
-const LICENSING_URL = `${GITHUB_URL}/blob/main/LICENSING.md`;
 
 const TOC = [
   { id: 'overview', label: 'Overview' },
@@ -32,12 +31,12 @@ export default function TermsPage() {
       title="Terms of use"
       updated="November 15, 2026"
       toc={TOC}
-      lede={<p>Memty is free, source-available software. These terms explain what you can expect from it, and what is up to you, when you use the software, this website or the demo workspace.</p>}
+      lede={<p>Memty is free, open-source software. These terms explain what you can expect from it, and what is up to you, when you use the software, this website or the demo workspace.</p>}
     >
       <DocSection id="overview" title="Overview">
         <Callout title="In short">
           <ul>
-            <li>The software is Fair Source: use, change and share it for anything except a competing commercial product.</li>
+            <li>The software is licensed under Apache 2.0: use, change and share it freely.</li>
             <li>It is alpha software, provided as is, without warranty.</li>
             <li>Your memory stays on your computer, and you decide what to send to AI assistants.</li>
           </ul>
@@ -46,14 +45,8 @@ export default function TermsPage() {
       </DocSection>
 
       <DocSection id="license" title="The software license">
-        <p>The Memty package, browser extension, MCP server and this website&apos;s source code are released under the <a href={LICENSE_URL} target="_blank" rel="noreferrer">Functional Source License, Version 1.1, ALv2 Future License</a> (FSL-1.1-ALv2), a Fair Source license.</p>
-        <ul>
-          <li><strong>You may</strong> use, copy, modify and redistribute Memty for any purpose except a competing use, including inside your company, for teaching and research, and when providing services to a client.</li>
-          <li><strong>You may not</strong> make Memty, or something substantially similar built from it, available to others as a commercial product or service that competes with Memty.</li>
-          <li><strong>Every release becomes Apache 2.0</strong> on the second anniversary of its release, without restrictions on competing use.</li>
-          <li><strong>Versions 0.2.1 and earlier</strong> were released under the MIT License and remain available under it.</li>
-        </ul>
-        <p>Read the <a href={LICENSING_URL} target="_blank" rel="noreferrer">plain-language summary</a>. If it and the license disagree, the license wins. Memty is free: there is no paid plan, account or subscription.</p>
+        <p>The Memty package, browser extension, MCP server and this website&apos;s source code are released under the <a href={LICENSE_URL} target="_blank" rel="noreferrer">Apache License, Version 2.0</a>. You may use, copy, modify and distribute Memty, including commercially, as long as you include the license and the NOTICE file, keep copyright notices, and mark files you changed. The license also grants a patent license from contributors. Versions 0.2.1 and earlier were released under the MIT License.</p>
+        <p>Memty is free. There is no paid plan, account or subscription.</p>
       </DocSection>
 
       <DocSection id="alpha" title="Alpha software">
@@ -73,8 +66,8 @@ export default function TermsPage() {
       </DocSection>
 
       <DocSection id="trademarks" title="Names and logos">
-        <p>ChatGPT, OpenAI, Claude, Anthropic, Gemini, Google, Perplexity, Cursor, Ollama and other product names and logos shown on this site belong to their respective owners. They are used only to say which tools Memty works with. Memty is an independent project and is not affiliated with, sponsored or endorsed by those companies.</p>
-        <p>Memty&apos;s license covers its code, not its name or logo. You may say your project uses or is based on Memty, but you may not present a modified copy as the official Memty or suggest it is endorsed by it.</p>
+        <p>ChatGPT, OpenAI, Claude, Anthropic, Gemini, Google, Perplexity, Cursor, Ollama and other product names and logos shown on this site belong to their respective owners. They are used only to say which tools Memty works with. Memty is an independent open-source project and is not affiliated with, sponsored or endorsed by those companies.</p>
+        <p>The Apache License covers Memty&apos;s code, not its name or logo (see its section 6). You may say your project uses or is based on Memty, but you may not present a modified copy as the official Memty or suggest it is endorsed by it.</p>
       </DocSection>
 
       <DocSection id="acceptable-use" title="Acceptable use">
@@ -88,7 +81,7 @@ export default function TermsPage() {
       </DocSection>
 
       <DocSection id="warranty" title="No warranty">
-        <p>Memty, this website and the demo are provided <strong>&ldquo;as is&rdquo;</strong>, without warranty of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose, title and non-infringement, as stated in the license. We don&apos;t promise that Memty will be error-free, secure against every attack, or always available.</p>
+        <p>Memty, this website and the demo are provided <strong>&ldquo;as is&rdquo;</strong>, without warranty of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose, title and non-infringement, as stated in the Apache License. We don&apos;t promise that Memty will be error-free, secure against every attack, or always available.</p>
       </DocSection>
 
       <DocSection id="liability" title="Limitation of liability">

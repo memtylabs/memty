@@ -79,7 +79,7 @@ export default function Page() {
         <section className="hero">
           <div className="hero-copy">
             <a className="mt-pill" href={PYPI_URL} target="_blank" rel="noreferrer">
-              <span className="mt-pill-dot" /> v0.2.1 on PyPI · source on GitHub · Fair Source
+              <span className="mt-pill-dot" /> v0.2.1 on PyPI · open source · Apache 2.0
             </a>
             <h1>
               Your AI forgets.
@@ -312,7 +312,7 @@ memty connect             # optional: Claude Code, Codex, Cursor, VS Code…`}</
         <section className="final">
           <Reveal className="final-card">
             <h2>Tell it once.<br /><span className="mt-grad">Every assistant remembers.</span></h2>
-            <p>Free to use, with every line of source on GitHub. Your memory stays in one file on your computer.</p>
+            <p>Free and open source. Your memory stays in one file on your computer.</p>
             <div className="hero-cta is-center">
               <CopyCommand command="pip install memty" />
               <Link className="mt-btn mt-btn-primary" href="/workspace">Open the demo workspace →</Link>

@@ -8,7 +8,7 @@ One private, local memory vault for every AI assistant you use.</p>
 <p align="center">
   <a href="https://pypi.org/project/memty/"><img src="https://img.shields.io/pypi/v/memty.svg" alt="PyPI version"></a>
   <a href="https://pypi.org/project/memty/"><img src="https://img.shields.io/pypi/pyversions/memty.svg" alt="Python versions"></a>
-  <a href="https://github.com/memtylabs/memty/blob/main/LICENSING.md"><img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue.svg" alt="License: FSL-1.1-ALv2"></a>
+  <a href="https://github.com/memtylabs/memty/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
 </p>
 
 <p align="center">
@@ -210,4 +210,4 @@ Remove the extension in `chrome://extensions`. Your vault stays in `~/.memty/` u
 
 ## License
 
-Fair Source: [FSL-1.1-ALv2](https://github.com/memtylabs/memty/blob/main/LICENSE). Use, change and share Memty for anything except a competing commercial product. Each release becomes Apache 2.0 two years after it ships, and versions 0.2.1 and earlier remain MIT. Plain-language summary: [LICENSING.md](https://github.com/memtylabs/memty/blob/main/LICENSING.md).
+Apache License 2.0. See [LICENSE](https://github.com/memtylabs/memty/blob/main/LICENSE) and [NOTICE](https://github.com/memtylabs/memty/blob/main/NOTICE). Versions 0.2.1 and earlier were released under MIT.
