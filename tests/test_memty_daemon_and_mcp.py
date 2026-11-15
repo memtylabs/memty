@@ -15,7 +15,7 @@ from memty.vault.ledger import MemtyLedger
 from memty.vault.tokens import estimate_tokens
 
 
-class WeekTwoTests(unittest.TestCase):
+class DaemonAndMCPTests(unittest.TestCase):
     def test_parallel_connections_and_pragmas(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ledger.sqlite3"

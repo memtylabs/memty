@@ -1,4 +1,4 @@
-"""Week 1 acceptance tests for the Memty atomic vault and context compiler."""
+"""Acceptance tests for the Memty atomic vault and context compiler."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from memty import (FACT_TOKEN_LIMIT, LocalRoutingRequired, MemtyLedger,
                    TombstonedSlot, estimate_tokens)
 
 
-class WeekOneTests(unittest.TestCase):
+class VaultTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.path = Path(self.temp.name) / "ledger.sqlite3"

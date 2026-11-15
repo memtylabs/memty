@@ -48,7 +48,7 @@ You should see `Ran 61 tests ... OK`. On Windows, one test (`test_endpoint_file_
 **Run the whole test suite** to confirm nothing else broke:
 
 ```shell
-python -m unittest tests.test_memty_security tests.test_memty_week1 tests.test_memty_week2 tests.test_memty_week3 tests.test_memty_week4 tests.test_memty_trust tests.test_memty_welcome tests.test_memty_daemon_command tests.test_memty_benchmark
+python -m unittest tests.test_memty_security tests.test_memty_vault tests.test_memty_daemon_and_mcp tests.test_memty_web_bridge tests.test_memty_client_setup tests.test_memty_trust tests.test_memty_welcome tests.test_memty_daemon_command tests.test_memty_benchmark
 ```
 
 ## 2. Try the attacks by hand
