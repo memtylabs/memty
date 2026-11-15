@@ -46,7 +46,7 @@ export default function PrivacyPage() {
       </DocSection>
 
       <DocSection id="scope" title="What this covers">
-        <p>This notice covers the Memty project published at <a href={GITHUB_URL} target="_blank" rel="noreferrer">github.com/memtylabs/memty</a>:</p>
+        <p>This notice covers the open-source Memty project published at <a href={GITHUB_URL} target="_blank" rel="noreferrer">github.com/memtylabs/memty</a>:</p>
         <ul>
           <li>the <code>memty</code> Python package, its local bridge and its background daemon (<code>memtyd</code>);</li>
           <li>the Memty Bridge browser extension;</li>
