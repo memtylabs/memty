@@ -261,9 +261,9 @@ For semantic memory retrieval, create the Atlas Search vector index on `Memory.u
 
 | Milestone | Status |
 | --- | --- |
-| **Week 1:** atomic vault, versioning, permanent deletion, privacy gate, token-bounded compiler | ✅ Shipped |
-| **Week 2:** shared `memtyd` daemon, MCP server, safe `memty connect` | ✅ Shipped |
-| **Week 3:** browser extension, fact manager, readable capsules, local extraction, pairing, autostart, PyPI v0.2.0 | ✅ Shipped |
+| **Vault and compiler:** atomic vault, versioning, permanent deletion, privacy gate, token-bounded compiler | ✅ Shipped |
+| **Shared daemon and MCP:** shared `memtyd` daemon, MCP server, safe `memty connect` | ✅ Shipped |
+| **Browser extension:** browser extension, fact manager, readable capsules, local extraction, pairing, autostart, PyPI v0.2.0 | ✅ Shipped |
 | Chrome Web Store listing (one-click install) | ⏭️ Next |
 | Trust control plane: `memty scan`, agent proposal inbox, context receipts and `memty report` | 🔨 Built, unreleased |
 | [Synthetic token payload benchmark](benchmarks/token_burn/README.md) | Available; real-provider and product comparisons remain to be measured |

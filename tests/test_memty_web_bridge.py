@@ -1,4 +1,4 @@
-"""Week 3: localhost web bridge, local fact extraction, and memty clip."""
+"""Localhost web bridge, local fact extraction, and memty clip."""
 import http.client
 import json
 import os

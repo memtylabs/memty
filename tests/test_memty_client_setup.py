@@ -1,4 +1,4 @@
-"""Week 4: cross-client setup and bounded MCP source access."""
+"""Cross-client setup and bounded MCP source access."""
 import asyncio
 import json
 import os

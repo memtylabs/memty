@@ -20,7 +20,7 @@ from memty.vault.tokens import estimate_tokens
 from memty.trust.receipts import log_blocked, log_served
 from memty.trust.render import format_inbox, format_report
 from memty.integrations.browser.bridge import BridgeServer, load_or_create_token
-from tests.test_memty_week3 import EXT, PerCallLedger
+from tests.test_memty_web_bridge import EXT, PerCallLedger
 
 PYPROJECT = '''
 [build-system]

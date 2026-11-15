@@ -1,4 +1,4 @@
-"""Small end-to-end smoke test for the local Memty Week 1 vault."""
+"""Small end-to-end smoke test for the local Memty vault."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def main() -> None:
             assert reopened.list_constraints(namespace="project.api")[0]["rule_id"] == "database_queries"
             assert reopened.find("project.api", "cache_engine")["value"] == "DragonflyDB"
 
-    print("Memty Week 1 smoke test passed.")
+    print("Memty vault smoke test passed.")
 
 
 if __name__ == "__main__":
