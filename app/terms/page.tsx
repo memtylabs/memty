@@ -1,20 +1,104 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Callout, DocLayout, DocSection } from '@/components/site/doc-layout';
+import { GITHUB_URL } from '@/components/site/brand';
 
-export const metadata: Metadata = { title: 'Terms of Service | Memty', description: 'Terms for using the Memty workspace.' };
+export const metadata: Metadata = {
+  title: 'Terms of use | Memty',
+  description: 'Terms for using the Memty software, this website and the demo workspace.',
+};
 
-const sections = [
-  ['1. The service', 'Memty provides a workspace that can send prompts to third-party AI model providers. Features and provider availability may change. Some features are experimental and may be interrupted or withdrawn.'],
-  ['2. Eligibility and accounts', 'You must be legally able to enter a contract where you live and meet any applicable minimum age. Keep your account credentials private. You are responsible for activity through your account. Do not use the service on behalf of an organization unless you have authority to bind it.'],
-  ['3. Your content and AI output', 'You retain rights you already hold in prompts and other content you submit. Subject to provider terms and applicable law, you may use output returned to you. AI output can be inaccurate, incomplete, biased, or unsuitable for your purpose; review it before relying on or publishing it. Do not use it as professional medical, legal, financial, or safety advice.'],
-  ['4. Acceptable use', 'Do not use the service to break the law, infringe others’ rights, harm people, bypass security or usage limits, interfere with the service, or submit malicious code. Do not use output to make consequential decisions about a person without appropriate human review. You must have permission to submit content and personal information.'],
-  ['5. Third-party AI providers and memory', 'Prompts and relevant portable memory are routed to the provider for the model you select. When configured, Gemini may also process recent conversation content to extract memories and create embeddings, regardless of the model selected for the answer. Compare mode sends your prompt to both selected models. Those providers operate under their own terms and privacy practices. Their availability, output, and processing are outside Memty control. Review the applicable provider terms before sending sensitive information.'],
-  ['6. Availability and changes', 'We aim to keep the service useful and available but do not promise uninterrupted or error-free operation. We may update features and these terms. For material changes, we will update the date below and provide notice where required. Continued use after the effective date means you accept revised terms.'],
-  ['7. Suspension and termination', 'You may stop using the service at any time. We may suspend or end access if reasonably needed to protect users, the service, or comply with law. Where appropriate, we will give notice and an opportunity to address the issue.'],
-  ['8. Disclaimers and liability', 'To the extent permitted by law, the service is provided “as is” and “as available.” Memty disclaims implied warranties. Nothing here excludes liability that cannot legally be excluded. Any additional limits, governing law, dispute process, and consumer rights depend on the operating entity and the laws that apply to you.'],
-  ['9. Contact', 'Questions about these terms: replace this line with your monitored legal contact before public release.'],
+const LICENSE_URL = `${GITHUB_URL}/blob/main/LICENSE`;
+const LICENSING_URL = `${GITHUB_URL}/blob/main/LICENSING.md`;
+
+const TOC = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'license', label: 'The software license' },
+  { id: 'alpha', label: 'Alpha software' },
+  { id: 'your-data', label: 'Your data and choices' },
+  { id: 'third-parties', label: 'Third-party services' },
+  { id: 'trademarks', label: 'Names and logos' },
+  { id: 'acceptable-use', label: 'Acceptable use' },
+  { id: 'warranty', label: 'No warranty' },
+  { id: 'liability', label: 'Limitation of liability' },
+  { id: 'changes', label: 'Changes and contact' },
 ];
 
 export default function TermsPage() {
-  return <main className="legal-shell"><nav className="legal-nav"><Link href="/" className="legal-brand">Memty</Link><Link href="/privacy">Privacy</Link></nav><article className="legal-content"><p className="legal-eyebrow">MEMTY · LEGAL</p><h1>Terms of Service</h1><p className="legal-intro">Effective date: October 19, 2026</p><p className="legal-callout"><strong>Release checklist:</strong> This draft contains a contact placeholder. Confirm the legal entity, contact address, governing law, billing/refund terms (if charging), and dispute terms with counsel before publishing as a binding agreement.</p>{sections.map(([title, body]) => <section key={title}><h2>{title}</h2><p>{body}</p></section>)}<p className="legal-source">Drafting references: <a href="https://www.ftc.gov/policy/advocacy-research/tech-at-ftc/2024/01/ai-companies-uphold-your-privacy-and-confidentiality-commitments">FTC guidance on AI privacy commitments</a>.</p></article><footer className="legal-footer"><span>© 2026 Memty</span><Link href="/privacy">Privacy notice</Link><Link href="/api-reference">API reference</Link></footer></main>;
+  return (
+    <DocLayout
+      path="/terms"
+      eyebrow="Legal"
+      title="Terms of use"
+      updated="November 15, 2026"
+      toc={TOC}
+      lede={<p>Memty is free, source-available software. These terms explain what you can expect from it, and what is up to you, when you use the software, this website or the demo workspace.</p>}
+    >
+      <DocSection id="overview" title="Overview">
+        <Callout title="In short">
+          <ul>
+            <li>The software is Fair Source: use, change and share it for anything except a competing commercial product.</li>
+            <li>It is alpha software, provided as is, without warranty.</li>
+            <li>Your memory stays on your computer, and you decide what to send to AI assistants.</li>
+          </ul>
+        </Callout>
+        <p>By using Memty or this website, you agree to these terms. If you don&apos;t agree, please don&apos;t use them. The software itself is also governed by its license, described below. If the two conflict for the software, the license wins.</p>
+      </DocSection>
+
+      <DocSection id="license" title="The software license">
+        <p>The Memty package, browser extension, MCP server and this website&apos;s source code are released under the <a href={LICENSE_URL} target="_blank" rel="noreferrer">Functional Source License, Version 1.1, ALv2 Future License</a> (FSL-1.1-ALv2), a Fair Source license.</p>
+        <ul>
+          <li><strong>You may</strong> use, copy, modify and redistribute Memty for any purpose except a competing use, including inside your company, for teaching and research, and when providing services to a client.</li>
+          <li><strong>You may not</strong> make Memty, or something substantially similar built from it, available to others as a commercial product or service that competes with Memty.</li>
+          <li><strong>Every release becomes Apache 2.0</strong> on the second anniversary of its release, without restrictions on competing use.</li>
+          <li><strong>Versions 0.2.1 and earlier</strong> were released under the MIT License and remain available under it.</li>
+        </ul>
+        <p>Read the <a href={LICENSING_URL} target="_blank" rel="noreferrer">plain-language summary</a>. If it and the license disagree, the license wins. Memty is free: there is no paid plan, account or subscription.</p>
+      </DocSection>
+
+      <DocSection id="alpha" title="Alpha software">
+        <p>Memty is in alpha (version 0.x). The vault&apos;s storage format is stable and covered by tests, but commands, options and the local bridge may change between versions. Features may be changed or removed.</p>
+        <p>Keep a backup of anything you can&apos;t afford to lose, including your vault file, and read the <a href={`${GITHUB_URL}/blob/main/memty/CHANGELOG.md`} target="_blank" rel="noreferrer">changelog</a> before upgrading.</p>
+      </DocSection>
+
+      <DocSection id="your-data" title="Your data and choices">
+        <p>Your vault is stored on your own computer and belongs to you. The Memty project does not receive, store or license your facts.</p>
+        <p>You are responsible for what you save and what you send. Memty&apos;s privacy gate masks private values and refuses secrets, but it is a safeguard, not a guarantee. Review each capsule before you send it, and only store information you have the right to store.</p>
+        <p>See the <Link href="/privacy">privacy notice</Link> for exactly what data each part of Memty touches.</p>
+      </DocSection>
+
+      <DocSection id="third-parties" title="Third-party services">
+        <p>Memty works alongside services it does not control, including ChatGPT, Claude, Gemini, Perplexity, Cursor, VS Code, Ollama, GitHub and PyPI. When you send content to them, their terms and privacy policies apply. Memty is not responsible for their availability, output or handling of your data.</p>
+        <p>AI output can be wrong, incomplete or unsuitable. Check it before relying on it, and don&apos;t treat it as professional medical, legal, financial or safety advice.</p>
+      </DocSection>
+
+      <DocSection id="trademarks" title="Names and logos">
+        <p>ChatGPT, OpenAI, Claude, Anthropic, Gemini, Google, Perplexity, Cursor, Ollama and other product names and logos shown on this site belong to their respective owners. They are used only to say which tools Memty works with. Memty is an independent project and is not affiliated with, sponsored or endorsed by those companies.</p>
+        <p>Memty&apos;s license covers its code, not its name or logo. You may say your project uses or is based on Memty, but you may not present a modified copy as the official Memty or suggest it is endorsed by it.</p>
+      </DocSection>
+
+      <DocSection id="acceptable-use" title="Acceptable use">
+        <p>Please don&apos;t use Memty or this website to:</p>
+        <ul>
+          <li>break the law or infringe anyone&apos;s rights, including storing personal data you have no right to process;</li>
+          <li>attack, overload or try to break this website or anyone else&apos;s systems;</li>
+          <li>hide malware in, or misrepresent, modified copies of Memty.</li>
+        </ul>
+        <p>Security research on your own installation is welcome. Report what you find privately through the <a href={`${GITHUB_URL}/security/advisories/new`} target="_blank" rel="noreferrer">GitHub security advisory form</a>.</p>
+      </DocSection>
+
+      <DocSection id="warranty" title="No warranty">
+        <p>Memty, this website and the demo are provided <strong>&ldquo;as is&rdquo;</strong>, without warranty of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose, title and non-infringement, as stated in the license. We don&apos;t promise that Memty will be error-free, secure against every attack, or always available.</p>
+      </DocSection>
+
+      <DocSection id="liability" title="Limitation of liability">
+        <p>To the fullest extent permitted by law, the authors and copyright holders are not liable for any claim, damages or other liability, whether in contract, tort or otherwise, arising from or in connection with Memty or its use, including loss of data. Some jurisdictions don&apos;t allow certain limits, so parts of this section may not apply to you. Nothing here limits rights you have under consumer law that can&apos;t be waived.</p>
+      </DocSection>
+
+      <DocSection id="changes" title="Changes and contact">
+        <p>We may update these terms as Memty changes. The date at the top shows the latest version, and every revision is public in the project&apos;s <a href={`${GITHUB_URL}/commits/main/app/terms/page.tsx`} target="_blank" rel="noreferrer">Git history</a>. Using Memty after a change means you accept the updated terms.</p>
+        <p>Questions: open an issue on <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">GitHub</a>.</p>
+      </DocSection>
+    </DocLayout>
+  );
 }
