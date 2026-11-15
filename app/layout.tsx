@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     'One private, local memory vault shared by ChatGPT, Claude, Gemini, Perplexity, Cursor and every MCP agent.',
   applicationName: 'Memty',
-  icons: { icon: '/static/assets/MemtySplash.png' },
+  icons: { icon: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/static/assets/MemtySplash.png` },
 };
 
 export const viewport: Viewport = {

@@ -38,6 +38,16 @@ This folder contains the Memty Next.js App Router UI, API routes, shared global 
 
 The login page renders legacy HTML strings from `lib/legacy-markup.ts`; `LegacyPage` attaches their browser scripts from `public/legacy/`. The landing page, demo workspace, Memory dashboard and legal pages use React components directly. The landing page and workspace styles live in `memty.css`, scoped under `.mt`.
 
+## GitHub Pages
+
+`.github/workflows/deploy-pages.yml` publishes `/`, `/workspace`, `/privacy`, `/terms` and `/api-reference` to <https://memtylabs.github.io/memty/> on every push to `main` that touches the app. It sets `PAGES_BASE_PATH`, which makes `next.config.ts` produce a static export under that sub-path, and drops the server-only routes (API, backend proxies, login, memory, chatbot) first. To try the Pages build locally in PowerShell:
+
+```powershell
+$env:PAGES_BASE_PATH = '/memty'; npm run build   # output in out/
+```
+
+Use root-relative links through `next/link` (or prefix `process.env.NEXT_PUBLIC_BASE_PATH`) so they keep working under the sub-path.
+
 ## API routes
 
 - `POST /api/chat`: authenticates through the backend, retrieves user context, calls the selected model, optionally compares a second model, and persists the turn.

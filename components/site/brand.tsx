@@ -67,7 +67,7 @@ export function SiteNav({ current }: { current?: 'home' | 'workspace' }) {
             <GitHubIcon />
           </a>
           {current === 'workspace' ? (
-            <a className="mt-btn mt-btn-primary mt-btn-sm" href="/#install">Install Memty</a>
+            <Link className="mt-btn mt-btn-primary mt-btn-sm" href="/#install">Install Memty</Link>
           ) : (
             <Link className="mt-btn mt-btn-primary mt-btn-sm" href="/workspace">Try the demo</Link>
           )}
@@ -89,10 +89,10 @@ export function SiteFooter() {
         <div className="mt-footer-cols">
           <div>
             <h4>Product</h4>
-            <a href="/#how">How it works</a>
-            <a href="/#install">Install</a>
+            <Link href="/#how">How it works</Link>
+            <Link href="/#install">Install</Link>
             <Link href="/workspace">Demo workspace</Link>
-            <a href="/#privacy">Privacy gate</a>
+            <Link href="/#privacy">Privacy gate</Link>
           </div>
           <div>
             <h4>Resources</h4>

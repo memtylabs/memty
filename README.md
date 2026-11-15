@@ -248,8 +248,8 @@ For semantic memory retrieval, create the Atlas Search vector index on `Memory.u
 | [`memty/integrations/browser/extension/`](memty/integrations/browser/extension/README.md) | The Memty Bridge browser extension (shipped inside the package) |
 | [`memoryport/`](memoryport/README.md) | The older temporal vault, kept for the `memory-vault` Docker service (`memty-api`) |
 | [`tests/`](tests/) | Package tests (`python -m pytest tests`) |
-| [`GitPage/`](GitPage/index.html) | The product website, deployed to [GitHub Pages](https://memtylabs.github.io/memty/) on every change to `main` |
-| [`app/`](app/README.md) | Web workspace: Next.js pages, API routes, and chat orchestration |
+| [`GitPage/`](GitPage/index.html) | The earlier static product page; no longer deployed |
+| [`app/`](app/README.md) | The website: Next.js landing page and demo workspace, deployed to [GitHub Pages](https://memtylabs.github.io/memty/) on every change to `main`, plus the older API routes |
 | [`backend/`](backend/README.md) | Web workspace: Express routes, authentication, and MongoDB models |
 | [`providers/`](providers/README.md) | Web workspace: model registry, provider adapters, and fallbacks |
 | [`components/`](components/legacy-page.tsx) · [`lib/`](lib/legacy-markup.ts) · [`public/`](public/) · [`templates/`](templates/) · [`static/`](static/) | Shared UI pieces, legacy markup, and static assets |
