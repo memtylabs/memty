@@ -17,7 +17,9 @@ This folder contains the Memty Next.js App Router UI, API routes, shared global 
 | App routes | `page.tsx`, `login/`, `chatbot/`, `memory/`, `terms/`, `privacy/` | Route entry points and React pages. |
 | Chat endpoint | `api/chat/route.ts` | Request validation, context orchestration, provider call, and persistence handoff. |
 | Public model metadata | `api/config/route.ts` | Reports configured models without exposing provider secrets. |
-| Legacy landing, login, and chat UI | `../lib/legacy-markup.ts`, `../components/legacy-page.tsx`, `../public/legacy/` | HTML strings, React wrapper, and page scripts. |
+| Landing page | `page.tsx`, `../components/landing/`, `../components/site/` | Hero, install walkthrough, privacy gate demo, benchmark. Styles in `memty.css`. |
+| Demo workspace | `workspace/`, `../components/workspace/`, `../lib/memty-sim.ts` | In-browser Memty demo. `memty-sim.ts` mirrors the package's token estimate, capsule format and privacy gate; keep them in sync. |
+| Legacy login UI | `../lib/legacy-markup.ts`, `../components/legacy-page.tsx`, `../public/legacy/` | HTML strings, React wrapper, and page scripts. |
 | Shared and responsive styles | `globals.css` | Scope legacy styles to their page root classes. |
 | Backend proxy routes | `backend/`, `users/` | Forward requests to the Express service. |
 
@@ -25,15 +27,16 @@ This folder contains the Memty Next.js App Router UI, API routes, shared global 
 
 | Route | Source | Purpose |
 | --- | --- | --- |
-| `/` | `page.tsx` + `components/legacy-page.tsx` | Landing page and model overview |
+| `/` | `page.tsx` | Memty landing page: what it is, install walkthrough, privacy gate, benchmark |
+| `/workspace` | `workspace/page.tsx` + `components/workspace/workspace.tsx` | Hands-on Memty demo that runs entirely in the browser (no server calls) |
 | `/login` | `login/page.tsx` | Sign in, register, and optional Google sign-in UI |
-| `/chatbot` | `chatbot/page.tsx` | Multi-model chat workspace |
+| `/chatbot` | `chatbot/page.tsx` | Redirects to `/workspace` (the old multi-model chat was retired) |
 | `/memory` | `memory/page.tsx` + `memory/memory-dashboard.tsx` | Memory controls, conversation summaries, and usage |
 | `/terms` | `terms/page.tsx` | Terms of Service draft |
 | `/privacy` | `privacy/page.tsx` | Privacy Notice draft |
 | `/api-reference` | `api-reference/page.tsx` | First-party chat API behavior and limitations |
 
-Landing, login, and chat pages render legacy HTML strings from `lib/legacy-markup.ts`; `LegacyPage` attaches their browser scripts from `public/legacy/`. The Memory dashboard and legal pages use React components directly.
+The login page renders legacy HTML strings from `lib/legacy-markup.ts`; `LegacyPage` attaches their browser scripts from `public/legacy/`. The landing page, demo workspace, Memory dashboard and legal pages use React components directly. The landing page and workspace styles live in `memty.css`, scoped under `.mt`.
 
 ## API routes
 
