@@ -1,9 +1,6 @@
-import LegacyPage from '@/components/legacy-page';
-import { indexMarkup } from '@/lib/legacy-markup';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: "Memty Workspace" };
-export const dynamic = 'force-dynamic';
-
+/** The old multi-model chat lived here. Memty's hands-on demo replaced it. */
 export default function Page() {
-  return <LegacyPage page="chat" markup={indexMarkup} />;
+  redirect('/workspace');
 }
