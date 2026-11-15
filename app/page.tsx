@@ -187,11 +187,28 @@ export default function Page() {
               <div className="arch-chips"><span>memty CLI</span><span>Python API</span><span>memty clip</span></div>
               <span className="arch-via">direct → daemon</span>
             </div>
-            <div className="arch-flow" aria-hidden="true"><i /><i /><i /></div>
-            <div className="arch-core">
-              <div><b>memtyd</b><span>one daemon per vault</span></div>
-              <span className="arch-arrow">→</span>
-              <div className="is-vault"><b>~/.memty/ledger.sqlite3</b><span>your vault</span></div>
+            {/* Three sources merge into one daemon, which owns the vault file. */}
+            <svg className="arch-merge" viewBox="0 0 600 80" preserveAspectRatio="none" aria-hidden="true">
+              {[
+                'M100 0 V28 Q100 40 112 40 H288 Q300 40 300 52 V80',
+                'M300 0 V80',
+                'M500 0 V28 Q500 40 488 40 H312 Q300 40 300 52 V80',
+              ].map((d, i) => (
+                <g key={d}>
+                  <path d={d} className="arch-wire" />
+                  <path d={d} className="arch-pulse" style={{ animationDelay: `${i * -0.6}s` }} />
+                </g>
+              ))}
+            </svg>
+            <div className="arch-link arch-link-merge" aria-hidden="true"><i /></div>
+            <div className="arch-node">
+              <b>memtyd</b>
+              <span>one local daemon per vault</span>
+            </div>
+            <div className="arch-link" aria-hidden="true"><i /><em>reads &amp; writes</em></div>
+            <div className="arch-node is-vault">
+              <b>~/.memty/ledger.sqlite3</b>
+              <span>your vault: one SQLite file you own</span>
             </div>
           </Reveal>
         </section>

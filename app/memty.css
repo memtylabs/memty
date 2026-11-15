@@ -305,18 +305,27 @@
 .arch-chips span { padding: 5px 10px; border-radius: 8px; font-size: 13px; background: var(--panel-2); border: 1px solid var(--line); }
 .arch-via { font-size: 13px; color: var(--muted); }
 .arch-via code { color: var(--lav); }
-.arch-flow { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); height: 28px; }
-.arch-flow i { justify-self: center; width: 2px; height: 100%; background: linear-gradient(180deg, rgba(185,179,255,.6), rgba(109,92,255,.1)); position: relative; overflow: hidden; }
-.arch-flow i::after { content: ''; position: absolute; left: -2px; width: 6px; height: 8px; border-radius: 3px; background: #fff; box-shadow: 0 0 10px var(--violet); animation: flow-down 1.8s ease-in infinite; }
-.arch-flow i:nth-child(2)::after { animation-delay: .6s; }
-.arch-flow i:nth-child(3)::after { animation-delay: 1.2s; }
+.arch { row-gap: 0; }
+.arch-merge { grid-column: 1 / -1; display: block; width: 100%; height: 64px; overflow: visible; }
+.arch-wire { fill: none; stroke: rgba(185,179,255,.3); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.arch-pulse {
+  fill: none; stroke: var(--lav); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 3 47;
+  vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 4px var(--violet));
+  animation: arch-flow 1.8s linear infinite;
+}
+@keyframes arch-flow { to { stroke-dashoffset: -50; } }
 @keyframes flow-down { from { top: -10px; } to { top: 100%; } }
-.arch-core { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
-.arch-core > div { padding: 16px 22px; border-radius: 16px; border: 1px solid rgba(185,179,255,.3); background: rgba(109,92,255,.1); display: grid; text-align: center; }
-.arch-core > div.is-vault { background: linear-gradient(180deg, rgba(109,92,255,.25), rgba(59,31,240,.15)); box-shadow: 0 20px 50px -20px rgba(59,31,240,.8); }
-.arch-core b { font-family: var(--mono); font-size: 15px; font-weight: 500; }
-.arch-core span { font-size: 12.5px; color: var(--muted); }
-.arch-core .arch-arrow { color: var(--lav); font-size: 22px; }
+.arch-node {
+  grid-column: 1 / -1; justify-self: center; min-width: 280px; display: grid; gap: 2px; text-align: center;
+  padding: 14px 24px; border-radius: 14px; border: 1px solid rgba(185,179,255,.32); background: rgba(109,92,255,.1);
+}
+.arch-node b { font-family: var(--mono); font-size: 15px; font-weight: 500; }
+.arch-node span { font-size: 12.5px; color: var(--muted); }
+.arch-node.is-vault { background: linear-gradient(180deg, rgba(109,92,255,.25), rgba(59,31,240,.15)); box-shadow: 0 20px 50px -20px rgba(59,31,240,.8); }
+.arch-link { grid-column: 1 / -1; justify-self: center; position: relative; width: 2px; height: 44px; background: linear-gradient(180deg, rgba(185,179,255,.6), rgba(109,92,255,.25)); }
+.arch-link i { position: absolute; left: -2px; width: 6px; height: 8px; border-radius: 3px; background: #fff; box-shadow: 0 0 10px var(--violet); animation: flow-down 1.8s ease-in infinite; }
+.arch-link em { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); white-space: nowrap; font: 11px var(--mono); color: var(--dim); }
+.arch-link-merge { display: none; }
 
 /* ── install film ─────────────────────────────────────── */
 .film {
@@ -776,8 +785,9 @@
   .film-os { margin-right: auto; }
   .problem-grid, .proof-grid { grid-template-columns: 1fr; }
   .arch { grid-template-columns: 1fr; }
-  .arch-flow { grid-template-columns: 1fr; }
-  .arch-flow i:not(:first-child) { display: none; }
+  .arch { row-gap: 12px; }
+  .arch-merge { display: none; }
+  .arch-link-merge { display: block; }
   .install-quick { grid-template-columns: 1fr; }
   .mt-footer-inner { grid-template-columns: 1fr; }
 
