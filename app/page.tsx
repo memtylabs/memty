@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import HeroOrbit from '@/components/landing/hero-orbit';
+import BlockField from '@/components/landing/block-field';
+import HeroVault3D from '@/components/landing/hero-vault-3d';
 import InstallFilm from '@/components/landing/install-film';
 import PrivacyGate from '@/components/landing/privacy-gate';
 import { BENCHMARK_URL, GITHUB_URL, PYPI_URL, SECURITY_URL, SiteFooter, SiteNav } from '@/components/site/brand';
@@ -67,6 +68,7 @@ export default function Page() {
     <div className="mt">
       <div className="mt-bg" aria-hidden="true">
         <div className="mt-bg-grid" />
+        <BlockField />
         <div className="mt-bg-glow mt-bg-glow-a" />
         <div className="mt-bg-glow mt-bg-glow-b" />
       </div>
@@ -101,7 +103,7 @@ export default function Page() {
               <li><b>1</b> SQLite file you own</li>
             </ul>
           </div>
-          <HeroOrbit />
+          <HeroVault3D />
         </section>
 
         {/* ── Works with ───────────────────────────────────── */}
