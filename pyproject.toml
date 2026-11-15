@@ -8,8 +8,8 @@ version = "0.2.1"
 description = "Your AI memory, owned by you: one private, local vault for ChatGPT, Claude, Gemini, Claude Code, Codex, Cursor and any MCP client"
 readme = "memty/README.md"
 requires-python = ">=3.10"
-license = "MIT"
-license-files = ["LICENSE"]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "RohanNK86" }]
 dependencies = ["mcp>=1.9,<2"]
 keywords = ["memty", "ai-memory", "portable-memory", "local-first", "privacy", "mcp", "model-context-protocol",

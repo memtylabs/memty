@@ -8,7 +8,7 @@ One private, local memory vault for every AI assistant you use.</p>
 <p align="center">
   <a href="https://pypi.org/project/memty/"><img src="https://img.shields.io/pypi/v/memty.svg" alt="PyPI version"></a>
   <a href="https://pypi.org/project/memty/"><img src="https://img.shields.io/pypi/pyversions/memty.svg" alt="Python versions"></a>
-  <a href="https://github.com/memtylabs/memty/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/memtylabs/memty/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
 </p>
 
 <p align="center">
@@ -210,4 +210,4 @@ Remove the extension in `chrome://extensions`. Your vault stays in `~/.memty/` u
 
 ## License
 
-MIT. See [LICENSE](https://github.com/memtylabs/memty/blob/main/LICENSE).
+Apache License 2.0. See [LICENSE](https://github.com/memtylabs/memty/blob/main/LICENSE) and [NOTICE](https://github.com/memtylabs/memty/blob/main/NOTICE). Versions 0.2.1 and earlier were released under MIT.

@@ -79,7 +79,7 @@ export default function Page() {
         <section className="hero">
           <div className="hero-copy">
             <a className="mt-pill" href={PYPI_URL} target="_blank" rel="noreferrer">
-              <span className="mt-pill-dot" /> v0.2.1 on PyPI · open source · MIT
+              <span className="mt-pill-dot" /> v0.2.1 on PyPI · open source · Apache 2.0
             </a>
             <h1>
               Your AI forgets.

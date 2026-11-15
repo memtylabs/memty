@@ -84,7 +84,7 @@ export function SiteFooter() {
         <div className="mt-footer-brand">
           <MemtyLogo />
           <p>Persistent memory for AI assistants and agents. One local vault, every tool, owned by you.</p>
-          <p className="mt-footer-meta">MIT licensed · alpha (0.x) · no account, no cloud, no telemetry</p>
+          <p className="mt-footer-meta">Apache 2.0 licensed · alpha (0.x) · no account, no cloud, no telemetry</p>
         </div>
         <div className="mt-footer-cols">
           <div>

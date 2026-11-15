@@ -11,7 +11,7 @@ One private, local memory vault for every AI assistant you use: ChatGPT, Claude,
 
 [![PyPI](https://img.shields.io/pypi/v/memty.svg)](https://pypi.org/project/memty/)
 [![Python](https://img.shields.io/pypi/pyversions/memty.svg)](https://pypi.org/project/memty/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 [Website](https://memtylabs.github.io/memty/) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Package docs](memty/README.md) · [Changelog](memty/CHANGELOG.md)
 
@@ -299,4 +299,4 @@ Start with the [contributor guide](CONTRIBUTING.md), pick the guide for the area
 
 ## 📄 License
 
-[MIT](LICENSE)
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE). Versions 0.2.1 and earlier were released under MIT.

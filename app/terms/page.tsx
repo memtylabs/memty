@@ -36,7 +36,7 @@ export default function TermsPage() {
       <DocSection id="overview" title="Overview">
         <Callout title="In short">
           <ul>
-            <li>The software is MIT licensed: use, change and share it freely.</li>
+            <li>The software is licensed under Apache 2.0: use, change and share it freely.</li>
             <li>It is alpha software, provided as is, without warranty.</li>
             <li>Your memory stays on your computer, and you decide what to send to AI assistants.</li>
           </ul>
@@ -45,7 +45,7 @@ export default function TermsPage() {
       </DocSection>
 
       <DocSection id="license" title="The software license">
-        <p>The Memty package, browser extension, MCP server and this website&apos;s source code are released under the <a href={LICENSE_URL} target="_blank" rel="noreferrer">MIT License</a>. You may use, copy, modify, merge, publish, distribute, sublicense and sell copies, as long as you keep the copyright and license notice.</p>
+        <p>The Memty package, browser extension, MCP server and this website&apos;s source code are released under the <a href={LICENSE_URL} target="_blank" rel="noreferrer">Apache License, Version 2.0</a>. You may use, copy, modify and distribute Memty, including commercially, as long as you include the license and the NOTICE file, keep copyright notices, and mark files you changed. The license also grants a patent license from contributors. Versions 0.2.1 and earlier were released under the MIT License.</p>
         <p>Memty is free. There is no paid plan, account or subscription.</p>
       </DocSection>
 
@@ -67,7 +67,7 @@ export default function TermsPage() {
 
       <DocSection id="trademarks" title="Names and logos">
         <p>ChatGPT, OpenAI, Claude, Anthropic, Gemini, Google, Perplexity, Cursor, Ollama and other product names and logos shown on this site belong to their respective owners. They are used only to say which tools Memty works with. Memty is an independent open-source project and is not affiliated with, sponsored or endorsed by those companies.</p>
-        <p>The MIT License covers Memty&apos;s code, not its name or logo. You may say your project uses or is based on Memty, but you may not present a modified copy as the official Memty or suggest it is endorsed by it.</p>
+        <p>The Apache License covers Memty&apos;s code, not its name or logo (see its section 6). You may say your project uses or is based on Memty, but you may not present a modified copy as the official Memty or suggest it is endorsed by it.</p>
       </DocSection>
 
       <DocSection id="acceptable-use" title="Acceptable use">
@@ -81,7 +81,7 @@ export default function TermsPage() {
       </DocSection>
 
       <DocSection id="warranty" title="No warranty">
-        <p>Memty, this website and the demo are provided <strong>&ldquo;as is&rdquo;</strong>, without warranty of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose, title and non-infringement, as stated in the MIT License. We don&apos;t promise that Memty will be error-free, secure against every attack, or always available.</p>
+        <p>Memty, this website and the demo are provided <strong>&ldquo;as is&rdquo;</strong>, without warranty of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose, title and non-infringement, as stated in the Apache License. We don&apos;t promise that Memty will be error-free, secure against every attack, or always available.</p>
       </DocSection>
 
       <DocSection id="liability" title="Limitation of liability">
