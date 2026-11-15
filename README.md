@@ -31,7 +31,7 @@ This repository contains two things:
 | | What it is | Status |
 | --- | --- | --- |
 | **The `memty` package** | The local memory vault, the `memtyd` daemon, CLI, MCP server, and browser bridge and extension | [On PyPI](https://pypi.org/project/memty/), v0.2.0 |
-| **The web workspace** | A multi-provider AI chat app (Next.js, Express, and MongoDB) | Run it yourself; see [Web workspace](#web-workspace) |
+| **The web app** | The Memty landing page and an in-browser demo workspace (Next.js), plus the older Express and MongoDB services | Run it yourself; see [Web workspace](#web-workspace) |
 
 > **Status:** Memty is in alpha (0.x). The vault's storage format is stable and covered by tests; commands and options may still change between minor versions.
 
@@ -172,7 +172,7 @@ The full reference, Python API, and security model are in the [package README](m
 <a id="web-workspace"></a>
 ## 🖥️ Web workspace
 
-The repository also contains a multi-provider AI chat workspace. Its account conversations and MongoDB memory are **separate from the local vault** and don't sync with it today.
+The Next.js app serves the Memty landing page at `/` and a hands-on demo at `/workspace`, which runs entirely in the browser and needs no backend. The older account services below remain in the repository. Their account conversations and MongoDB memory are **separate from the local vault** and don't sync with it today.
 
 ![Web workspace architecture: browser, Next.js, model providers, Express API, MongoDB, and optional local memory services](docs/architecture.svg)
 
