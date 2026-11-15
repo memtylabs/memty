@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MemtyLogo } from '@/components/site/brand';
+import { BRAND_LOGOS } from '@/components/landing/brand-logos';
+import { MemtyMark } from '@/components/site/brand';
 import {
-  cliQuote, compileCapsule, extractProposals, looksLikeCredential, PROVIDERS, recall, seedVault,
+  cliQuote, compileCapsule, estimateTokens, extractProposals, looksLikeCredential, PROVIDERS, recall, seedVault,
   SENSITIVITIES, slotLabel, toSlot, uid,
   type Capsule, type Context, type Fact, type Proposal, type Provider, type Sensitivity, type Vault,
 } from '@/lib/memty-sim';
@@ -27,8 +28,8 @@ type State = {
 const STORAGE_KEY = 'memty-demo-workspace-v1';
 
 const TASKS: { id: TaskId; title: string; hint: string }[] = [
-  { id: 'save', title: 'Save facts from a chat', hint: 'Select text in the reply, press ＋ Save to Memty' },
-  { id: 'paste', title: 'Paste with ⚡ Memty', hint: 'Click ⚡ Memty in the composer (or Alt+M)' },
+  { id: 'save', title: 'Save facts from a chat', hint: 'Highlight text in the reply, then click Save to Memty' },
+  { id: 'paste', title: 'Insert your memory', hint: 'Click Memty in the composer, or press Alt+M' },
   { id: 'send', title: 'Send with your context', hint: 'Ask a question below the pasted capsule' },
   { id: 'switch', title: 'Switch assistants', hint: 'Open another tab and paste the same context' },
   { id: 'private', title: 'Make a fact private', hint: 'Set a fact to CONF and paste into a cloud tab' },
@@ -62,7 +63,7 @@ function freshState(): State {
   PROVIDERS.forEach((p) => {
     chats[p.id] = p.id === 'chatgpt'
       ? welcome(p)
-      : [{ id: uid('m'), role: 'system', provider: p.id, text: `New ${p.name} chat. It knows nothing about you yet. Press ⚡ Memty to bring your memory here.` }];
+      : [{ id: uid('m'), role: 'system', provider: p.id, text: `New ${p.name} chat. It knows nothing about you yet. Click Memty below to bring your memory here.` }];
   });
   return { vault: seedVault(), chats, receipts: [], done: [], firstPasteProvider: null };
 }
@@ -93,7 +94,7 @@ function simulatedReply(text: string, provider: Provider): string {
   const match = text.match(CAPSULE_RE);
   const question = text.replace(CAPSULE_RE, '').trim();
   if (!match) {
-    return `I don’t have any context about you or your project yet, so I’d be guessing. Which stack, deploy target and preferences should I assume?\n\n(Tip: press ⚡ Memty to paste what you’ve already told other assistants.)`;
+    return `I don’t have any context about you or your project yet, so I’d be guessing. Which stack, deploy target and preferences should I assume?\n\n(Tip: click Memty below the message box to paste what you’ve already told other assistants.)`;
   }
   const lines = match[1].split('\n').map((l) => l.trim()).filter(Boolean)
     .map((l) => l.replace(/^\d+\.\s*/, ''))
@@ -109,33 +110,116 @@ function simulatedReply(text: string, provider: Provider): string {
   return `Thanks, I have your Memty context (${lines.length} fact${lines.length === 1 ? '' : 's'}${privateCount ? `, ${privateCount} private` : ''}). For ${ask}, here’s what I’m working from:\n\n${bullets}\n\nNo re-explaining needed. This is where ${provider.name}’s real answer would continue.`;
 }
 
+
 /* ------------------------------------------------------------------ */
 /* Small UI pieces                                                     */
 /* ------------------------------------------------------------------ */
 
-function Level({ level, onClick, title }: { level: Sensitivity; onClick?: () => void; title?: string }) {
-  const short = level === 'CONFIDENTIAL' ? 'CONF' : level;
-  if (!onClick) return <span className={`lvl lvl-${level.toLowerCase()} is-on`}>{short}</span>;
+const LEVEL_LABEL: Record<Sensitivity, string> = {
+  PUBLIC: 'Public', INTERNAL: 'Internal', CONFIDENTIAL: 'Confidential', SECRET: 'Secret',
+};
+
+function LevelTag({ level, onClick }: { level: Sensitivity; onClick?: () => void }) {
+  const cls = `wx-level is-${level.toLowerCase()}`;
+  if (!onClick) return <span className={cls}><i />{LEVEL_LABEL[level]}</span>;
   return (
-    <button type="button" className={`lvl lvl-${level.toLowerCase()} is-on`} onClick={onClick} title={title ?? 'Change sensitivity'}>
-      {short}
+    <button type="button" className={`${cls} is-button`} onClick={onClick} title="Change sensitivity">
+      <i />{LEVEL_LABEL[level]}
     </button>
   );
 }
 
-function EditIcon() {
+const ICONS: Record<string, string> = {
+  plus: 'M12 5v14M5 12h14',
+  search: 'M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-3.5-3.5',
+  edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z',
+  trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6',
+  lock: 'M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2ZM8 11V7a4 4 0 0 1 8 0v4',
+  reset: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',
+  info: 'M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0M12 16v-4M12 8h.01',
+  arrowUp: 'M12 19V5M5 12l7-7 7 7',
+  sparkles: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9ZM19 3v4M17 5h4',
+  check: 'M20 6 9 17l-5-5',
+  alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z',
+  ban: 'M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0M4.9 4.9l14.2 14.2',
+  eyeOff: 'M9.9 4.2A10 10 0 0 1 12 4c7 0 10 8 10 8a13 13 0 0 1-1.7 2.7M6.6 6.6A13 13 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.4-1.6M2 2l20 20M9.9 9.9a3 3 0 0 0 4.2 4.2',
+  minus: 'M5 12h14',
+  cursor: 'M4 4l7 17 2.5-7.5L21 11Z',
+  copy: 'M11 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2ZM5 15V5a2 2 0 0 1 2-2h10',
+  terminal: 'm4 17 6-6-6-6M12 19h8',
+  receipt: 'M5 2v20l2.5-1.5L10 22l2-1.5 2 1.5 2.5-1.5L19 22V2l-2.5 1.5L14 2l-2 1.5L10 2 7.5 3.5ZM9 8h6M9 12h6M9 16h4',
+  flag: 'M4 22V15M4 15V4a1 1 0 0 1 1-1h12l-2.5 5L17 13H4',
+  box: 'M21 8 12 3 3 8v8l9 5 9-5ZM3 8l9 5 9-5M12 13v8',
+  x: 'M18 6 6 18M6 6l12 12',
+  chevron: 'm6 9 6 6 6-6',
+};
+
+function Icon({ name, size = 16, className }: { name: keyof typeof ICONS; size?: number; className?: string }) {
   return (
-    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
-      <path d="M10.5 2.5l3 3L5 14H2v-3z" />
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d={ICONS[name]} />
     </svg>
   );
 }
 
-function TrashIcon() {
+/** An assistant's real brand mark on its disc (paths from Simple Icons, see brand-logos.ts). */
+function BrandIcon({ id, size = 18 }: { id: string; size?: number }) {
+  const gid = useId();
+  const logo = BRAND_LOGOS[id];
+  if (!logo) return <span className="wx-brand-fallback" style={{ width: size, height: size }} />;
+  const fill = logo.ink === 'gemini' ? `url(#${gid})` : logo.ink;
   return (
-    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 7v4M9.2 7v4" />
+    <svg className="wx-brand-icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      {logo.ink === 'gemini' && (
+        <defs>
+          <linearGradient id={gid} x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stopColor="#1c7dff" /><stop offset=".55" stopColor="#9b72cb" /><stop offset="1" stopColor="#d96570" />
+          </linearGradient>
+        </defs>
+      )}
+      <circle cx="12" cy="12" r="12" fill={logo.disc} />
+      <g transform="translate(5.2 5.2) scale(0.5667)"><path d={logo.path} fill={fill} /></g>
     </svg>
+  );
+}
+
+function Ring({ value, size = 16 }: { value: number; size?: number }) {
+  const r = 6.5;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" className="wx-ring">
+      <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2" className="wx-ring-track" />
+      <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2" className="wx-ring-fill"
+        strokeDasharray={c} strokeDashoffset={c * (1 - value / 100)} transform="rotate(-90 8 8)" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** The capsule a user pasted, shown as an attachment card inside their message. */
+function CapsuleCard({ text }: { text: string }) {
+  const body = text.match(CAPSULE_RE)?.[1] ?? '';
+  const lines = body.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => l.replace(/^\d+\.\s*/, ''));
+  return (
+    <div className="wx-attach">
+      <div className="wx-attach-head">
+        <MemtyMark size={14} />
+        <b>Memty context</b>
+        <span>{lines.length} fact{lines.length === 1 ? '' : 's'} · {estimateTokens(text.match(CAPSULE_RE)?.[0] ?? '')} tokens</span>
+      </div>
+      <ul>
+        {lines.map((l, i) => {
+          const at = l.indexOf(':');
+          const key = at > 0 ? l.slice(0, at) : l;
+          const value = at > 0 ? l.slice(at + 1).trim() : '';
+          return (
+            <li key={i}>
+              <span>{key}</span>
+              <em className={value === '[private]' ? 'is-private' : ''}>{value === '[private]' ? 'private' : value}</em>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -143,11 +227,13 @@ function timeAgo(at: number): string {
   const s = Math.max(1, Math.round((Date.now() - at) / 1000));
   if (s < 60) return 'just now';
   const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
+  if (m < 60) return `${m}m ago`;
   const h = Math.round(m / 60);
-  if (h < 24) return `${h} h ago`;
-  return `${Math.round(h / 24)} d ago`;
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
 }
+
+type InspectorTab = 'tour' | 'capsule' | 'terminal' | 'receipts';
 
 /* ------------------------------------------------------------------ */
 /* Workspace                                                           */
@@ -170,6 +256,7 @@ export default function Workspace() {
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const [adding, setAdding] = useState(false);
   const [mobilePane, setMobilePane] = useState<'vault' | 'chat' | 'inspect'>('chat');
+  const [itab, setItab] = useState<InspectorTab>('tour');
   const transcriptRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -203,7 +290,7 @@ export default function Workspace() {
   }, []);
 
   if (!state) {
-    return <div className="ws-loading"><span className="ws-spinner" /> Opening your demo vault…</div>;
+    return <div className="wx-loading"><span className="wx-spinner" /> Opening your demo vault…</div>;
   }
 
   const { vault } = state;
@@ -411,6 +498,7 @@ export default function Workspace() {
     notify('Demo reset to a fresh vault.');
   };
 
+
   /* ── render ──────────────────────────────────────────────────────── */
 
   const visibleContexts = contexts.filter((ctx) => {
@@ -422,289 +510,448 @@ export default function Workspace() {
   const messages = state.chats[provider.id] ?? [];
   const progress = Math.round((state.done.length / TASKS.length) * 100);
   const totalTokens = vault.facts.reduce((n, f) => n + Math.max(1, Math.ceil(`${slotLabel(f.slot)}: ${f.value}`.length / 4)), 0);
+  const currentTask = TASKS.find((t) => !state.done.includes(t.id));
+  const nsCount = (ns: string) => (ns === 'all' ? vault.facts.length : vault.facts.filter((f) => f.namespace === ns).length);
+  const shortName = (p: Provider) => p.name.replace(' (local)', '');
+  const providerByName = (name: string) => PROVIDERS.find((p) => p.name === name);
+  const copyCapsule = () => {
+    if (!inspectCapsule?.text) return;
+    navigator.clipboard?.writeText(inspectCapsule.text).then(() => notify('Capsule copied to the clipboard.'), () => notify('Copy is not available here.', 'warn'));
+  };
+  const openTab = (t: InspectorTab) => { setItab(t); setMobilePane('inspect'); };
 
   return (
-    <div className="ws" data-pane={mobilePane}>
-      {/* top bar */}
-      <header className="ws-top">
-        <MemtyLogo />
-        <span className="ws-badge">Demo workspace</span>
-        <span className="ws-local"><i /> Runs in your browser · nothing is uploaded</span>
-        <div className="ws-top-actions">
-          <div className="ws-progress" title={`${state.done.length} of ${TASKS.length} tour steps done`}>
-            <span>Tour</span><span className="ws-progress-bar"><i style={{ width: `${progress}%` }} /></span><b>{state.done.length}/{TASKS.length}</b>
-          </div>
-          <button type="button" className="mt-btn mt-btn-ghost mt-btn-sm" onClick={reset}>Reset</button>
-          <Link className="mt-btn mt-btn-primary mt-btn-sm" href="/#install">Install Memty</Link>
+    <div className="wx" data-pane={mobilePane}>
+      {/* ── top bar ─────────────────────────────────────────── */}
+      <header className="wx-top">
+        <Link href="/" className="wx-home" aria-label="Memty home">
+          <MemtyMark size={22} />
+          <span>Memty</span>
+        </Link>
+        <span className="wx-sep" aria-hidden="true">/</span>
+        <span className="wx-crumb">Demo workspace</span>
+        <span className="wx-tag">Sandbox</span>
+
+        <div className="wx-top-right">
+          <span className="wx-status"><Icon name="lock" size={13} /> Local only · nothing leaves this browser</span>
+          <button type="button" className="wx-tour-chip" onClick={() => openTab('tour')} title="Open the guided tour">
+            <Ring value={progress} /> Tour <b>{state.done.length}/{TASKS.length}</b>
+          </button>
+          <button type="button" className="wx-btn is-ghost" onClick={reset}><Icon name="reset" size={14} /> Reset</button>
+          <Link className="wx-btn is-primary" href="/#install">Install Memty</Link>
         </div>
       </header>
 
-      <nav className="ws-tabs" aria-label="Workspace panes">
+      <nav className="wx-mtabs" aria-label="Workspace panes">
         {(['vault', 'chat', 'inspect'] as const).map((p) => (
           <button key={p} type="button" className={mobilePane === p ? 'is-on' : ''} onClick={() => setMobilePane(p)}>
-            {p === 'vault' ? `Vault (${vault.facts.length})` : p === 'chat' ? 'Chat' : `Inspector ${state.done.length}/${TASKS.length}`}
+            {p === 'vault' ? <>Vault <span>{vault.facts.length}</span></> : p === 'chat' ? 'Chat' : <>Inspector <span>{state.done.length}/{TASKS.length}</span></>}
           </button>
         ))}
       </nav>
 
-      <div className="ws-grid">
-        {/* ── Vault pane ─────────────────────────────────────── */}
-        <aside className="ws-pane ws-vault" aria-label="Your vault">
-          <div className="ws-pane-head">
+      <div className="wx-grid">
+        {/* ── Vault ──────────────────────────────────────────── */}
+        <aside className="wx-pane wx-side" aria-label="Your vault">
+          <div className="wx-side-head">
             <div>
-              <h2>Your vault</h2>
-              <code className="ws-path">~/.memty/ledger.sqlite3</code>
+              <h2>Vault</h2>
+              <code>~/.memty/ledger.sqlite3</code>
             </div>
-            <button type="button" className="ws-icon-btn" onClick={() => setAdding((a) => !a)} aria-expanded={adding} title="Add a fact">＋</button>
+            <button type="button" className={`wx-icon-btn ${adding ? 'is-on' : ''}`} onClick={() => setAdding((a) => !a)} aria-expanded={adding} title="New fact">
+              <Icon name={adding ? 'x' : 'plus'} size={15} />
+            </button>
           </div>
 
           {adding && (
-            <form className="ws-add" onSubmit={(e) => { e.preventDefault(); addFact(e.currentTarget); }}>
-              <input name="namespace" placeholder="namespace (e.g. personal)" defaultValue={nsFilter !== 'all' ? nsFilter : 'personal'} aria-label="Namespace" />
-              <input name="title" placeholder="Title (e.g. Editor)" aria-label="Title" required />
-              <input name="value" placeholder="Value (e.g. VS Code)" aria-label="Value" required maxLength={160} />
-              <div className="ws-add-row">
-                <select name="level" aria-label="Sensitivity" defaultValue="PUBLIC">
-                  {SENSITIVITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <button type="submit" className="mt-btn mt-btn-primary mt-btn-sm">Remember</button>
+            <form className="wx-add" onSubmit={(e) => { e.preventDefault(); addFact(e.currentTarget); }}>
+              <div className="wx-add-title">New fact</div>
+              <label><span>Namespace</span><input name="namespace" placeholder="personal" defaultValue={nsFilter !== 'all' ? nsFilter : 'personal'} /></label>
+              <label><span>Title</span><input name="title" placeholder="Editor" required autoFocus /></label>
+              <label><span>Value</span><input name="value" placeholder="VS Code" required maxLength={160} /></label>
+              <div className="wx-add-row">
+                <label><span>Sensitivity</span>
+                  <select name="level" defaultValue="PUBLIC">
+                    {SENSITIVITIES.map((s) => <option key={s} value={s}>{LEVEL_LABEL[s]}</option>)}
+                  </select>
+                </label>
+                <button type="submit" className="wx-btn is-primary">Remember</button>
               </div>
             </form>
           )}
 
-          <div className="ws-filters">
-            <input className="ws-search" type="search" placeholder="Search facts" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search facts" />
-            <div className="ws-ns">
-              {['all', ...namespaces].map((ns) => (
-                <button key={ns} type="button" className={nsFilter === ns ? 'is-on' : ''} onClick={() => setNsFilter(ns)}>
-                  {ns === 'all' ? 'All' : ns}
+          <label className="wx-search">
+            <Icon name="search" size={14} />
+            <input type="search" placeholder="Search facts" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search facts" />
+          </label>
+
+          <div className="wx-ns" role="tablist" aria-label="Namespaces">
+            {['all', ...namespaces].map((ns) => (
+              <button key={ns} type="button" role="tab" aria-selected={nsFilter === ns} className={nsFilter === ns ? 'is-on' : ''} onClick={() => setNsFilter(ns)}>
+                {ns === 'all' ? 'All' : ns}<span>{nsCount(ns)}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="wx-groups">
+            {visibleContexts.length === 0 && (
+              <div className="wx-empty">
+                <Icon name="box" size={20} />
+                <b>No facts here yet</b>
+                <span>Highlight text in the chat and click Save to Memty.</span>
+              </div>
+            )}
+            {visibleContexts.map((ctx) => (
+              <section key={ctx.id} className={`wx-group ${inspectContext?.id === ctx.id ? 'is-active' : ''}`}>
+                <button type="button" className="wx-group-head" onClick={() => { setInspectId(ctx.id); setItab('capsule'); }} title="Preview this context as a capsule">
+                  <span className="wx-group-title">{ctx.title}</span>
+                  <span className="wx-group-meta">{ctx.namespace} · {timeAgo(ctx.createdAt)}</span>
+                </button>
+                <ul>
+                  {contextFacts(ctx).map((f) => (
+                    <li key={f.id} className="wx-fact">
+                      <div className="wx-fact-body">
+                        <span className="wx-fact-key">
+                          {slotLabel(f.slot)}
+                          {f.history.length > 1 && <em title={`${f.history.length} versions kept`}>v{f.history.length}</em>}
+                        </span>
+                        {editing?.id === f.id ? (
+                          <input
+                            className="wx-fact-edit" autoFocus value={editing.value}
+                            onChange={(e) => setEditing({ id: f.id, value: e.target.value })}
+                            onBlur={saveEdit}
+                            onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null); }}
+                            aria-label={`Edit ${slotLabel(f.slot)}`}
+                          />
+                        ) : f.sensitivity === 'SECRET' ? (
+                          <span className="wx-fact-value is-secret"><Icon name="lock" size={12} /> Stored on this device only</span>
+                        ) : (
+                          <span className="wx-fact-value">{f.value}</span>
+                        )}
+                      </div>
+                      <div className="wx-fact-side">
+                        <LevelTag level={f.sensitivity} onClick={() => cycleLevel(f)} />
+                        <div className="wx-fact-actions">
+                          {f.sensitivity !== 'SECRET' && (
+                            <button type="button" onClick={() => setEditing({ id: f.id, value: f.value })} aria-label={`Edit ${slotLabel(f.slot)}`} title="Edit"><Icon name="edit" size={13} /></button>
+                          )}
+                          <button type="button" className="is-danger" onClick={() => forgetFact(f)} aria-label={`Forget ${slotLabel(f.slot)}`} title="Forget permanently"><Icon name="trash" size={13} /></button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+
+          <footer className="wx-side-foot">
+            <span><b>{vault.facts.length}</b> facts</span>
+            <span><b>{vault.contexts.length}</b> contexts</span>
+            <span><b>{namespaces.length}</b> namespaces</span>
+            <span className="wx-mono">≈{totalTokens} tok</span>
+          </footer>
+        </aside>
+
+        {/* ── Chat ───────────────────────────────────────────── */}
+        <section className="wx-pane wx-chat" aria-label="Simulated assistant">
+          <div className="wx-chat-head">
+            <div className="wx-ptabs" role="tablist" aria-label="Assistant">
+              {PROVIDERS.map((p) => (
+                <button
+                  key={p.id} type="button" role="tab" aria-selected={p.id === provider.id}
+                  className={`wx-ptab ${p.id === provider.id ? 'is-on' : ''}`}
+                  onClick={() => { setProviderId(p.id); setSelection(null); setPickerOpen(false); }}
+                >
+                  <BrandIcon id={p.id} size={18} />
+                  <span>{shortName(p)}</span>
+                  {p.kind === 'local' && <em>Local</em>}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="ws-contexts">
-            {visibleContexts.length === 0 && <p className="ws-empty">No facts here yet. Select text in the chat and press ＋ Save to Memty.</p>}
-            {visibleContexts.map((ctx) => (
-              <section key={ctx.id} className={`ws-ctx ${inspectContext?.id === ctx.id ? 'is-inspected' : ''}`}>
-                <button type="button" className="ws-ctx-head" onClick={() => setInspectId(ctx.id)} title="Inspect this context">
-                  <b>{ctx.title}</b>
-                  <span>{ctx.namespace} · {timeAgo(ctx.createdAt)}</span>
-                </button>
-                {contextFacts(ctx).map((f) => (
-                  <div key={f.id} className="ws-fact">
-                    <div className="ws-fact-main">
-                      <span className="ws-fact-label">{slotLabel(f.slot)}{f.history.length > 1 && <em title={`${f.history.length} versions`}> v{f.history.length}</em>}</span>
-                      {editing?.id === f.id ? (
-                        <input
-                          className="ws-fact-edit" autoFocus value={editing.value}
-                          onChange={(e) => setEditing({ id: f.id, value: e.target.value })}
-                          onBlur={saveEdit}
-                          onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null); }}
-                          aria-label={`Edit ${slotLabel(f.slot)}`}
-                        />
-                      ) : (
-                        <span className={`ws-fact-value ${f.sensitivity === 'SECRET' ? 'is-secret' : ''}`}>
-                          {f.sensitivity === 'SECRET' ? '•••••••• (stays on this device)' : f.value}
-                        </span>
-                      )}
+          <div className="wx-transcript" ref={transcriptRef} onMouseUp={onTranscriptMouseUp} onTouchEnd={() => window.setTimeout(onTranscriptMouseUp, 50)}>
+            <div className="wx-thread">
+              {messages.map((m) => {
+                if (m.role === 'system') {
+                  return <div key={m.id} className="wx-sys"><Icon name="info" size={13} />{m.text}</div>;
+                }
+                if (m.role === 'user') {
+                  const rest = m.text.replace(CAPSULE_RE, '').trim();
+                  return (
+                    <div key={m.id} className="wx-user">
+                      <div className="wx-bubble">
+                        {CAPSULE_RE.test(m.text) && <CapsuleCard text={m.text} />}
+                        {rest && <p>{rest}</p>}
+                      </div>
                     </div>
-                    <div className="ws-fact-actions">
-                      <Level level={f.sensitivity} onClick={() => cycleLevel(f)} title="Click to change sensitivity" />
-                      {f.sensitivity !== 'SECRET' && (
-                        <button type="button" className="ws-mini" onClick={() => setEditing({ id: f.id, value: f.value })} aria-label={`Edit ${slotLabel(f.slot)}`} title="Edit"><EditIcon /></button>
-                      )}
-                      <button type="button" className="ws-mini is-danger" onClick={() => forgetFact(f)} aria-label={`Forget ${slotLabel(f.slot)}`} title="Forget permanently"><TrashIcon /></button>
+                  );
+                }
+                return (
+                  <div key={m.id} className="wx-bot">
+                    <BrandIcon id={provider.id} size={28} />
+                    <div className="wx-bot-body">
+                      <span className="wx-bot-name">{shortName(provider)}</span>
+                      <div className="wx-bot-text">{m.text}</div>
                     </div>
                   </div>
-                ))}
-              </section>
-            ))}
-          </div>
-
-          <div className="ws-vault-foot">
-            <span><b>{vault.facts.length}</b> facts</span>
-            <span><b>{vault.contexts.length}</b> contexts</span>
-            <span><b>{namespaces.length}</b> namespaces</span>
-            <span>~{totalTokens} tokens</span>
-          </div>
-        </aside>
-
-        {/* ── Chat pane ──────────────────────────────────────── */}
-        <section className="ws-pane ws-chat" aria-label="Simulated assistant">
-          <div className="ws-providers" role="tablist" aria-label="Assistant">
-            {PROVIDERS.map((p) => (
-              <button
-                key={p.id} type="button" role="tab" aria-selected={p.id === provider.id}
-                className={`ws-provider ${p.id === provider.id ? 'is-on' : ''} ${p.kind === 'local' ? 'is-local' : ''}`}
-                onClick={() => { setProviderId(p.id); setSelection(null); setPickerOpen(false); }}
-              >
-                <span className="ws-provider-dot" />{p.name}
-              </button>
-            ))}
-          </div>
-
-          <div className="ws-transcript" ref={transcriptRef} onMouseUp={onTranscriptMouseUp} onTouchEnd={() => window.setTimeout(onTranscriptMouseUp, 50)}>
-            {messages.map((m) => (
-              <div key={m.id} className={`ws-msg is-${m.role}`}>
-                {m.role !== 'system' && <span className="ws-msg-who">{m.role === 'user' ? 'You' : provider.name}</span>}
-                <div className="ws-msg-text">
-                  {m.text.split(CAPSULE_RE).length > 1 ? (
-                    <>
-                      <pre className="ws-msg-capsule">{m.text.match(CAPSULE_RE)?.[0]}</pre>
-                      {m.text.replace(CAPSULE_RE, '').trim() && <p>{m.text.replace(CAPSULE_RE, '').trim()}</p>}
-                    </>
-                  ) : m.text}
+                );
+              })}
+              {typing && (
+                <div className="wx-bot">
+                  <BrandIcon id={provider.id} size={28} />
+                  <div className="wx-bot-body"><span className="wx-bot-name">{shortName(provider)}</span><div className="wx-typing"><i /><i /><i /></div></div>
                 </div>
-              </div>
-            ))}
-            {typing && <div className="ws-msg is-assistant"><span className="ws-msg-who">{provider.name}</span><div className="ws-typing"><i /><i /><i /></div></div>}
-            {messages.length > 0 && provider.id === 'chatgpt' && !state.done.includes('save') && (
-              <div className="ws-coach">👆 Select the bullet list above, then press <b>＋ Save to Memty</b>.</div>
-            )}
+              )}
+              {messages.length > 0 && provider.id === 'chatgpt' && !state.done.includes('save') && (
+                <div className="wx-coach">
+                  <span className="wx-coach-icon"><Icon name="cursor" size={14} /></span>
+                  <div>
+                    <b>Try it: save these facts</b>
+                    <span>Highlight the bullet list in the reply above, then click <kbd>Save to Memty</kbd>.</span>
+                  </div>
+                </div>
+              )}
+            </div>
             {selection && (
               <button
-                type="button" className="ws-save-pill"
+                type="button" className="wx-selbar"
                 style={{ left: selection.x, top: selection.y }}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => openReview(selection.text)}
               >
-                ＋ Save to Memty
+                <MemtyMark size={14} /> Save to Memty
               </button>
             )}
           </div>
 
-          <div className="ws-composer">
-            {pickerOpen && (
-              <div className="ws-picker" role="dialog" aria-label="Pick a Memty context">
-                <div className="ws-picker-head">⚡ Memty · paste into {provider.name}<span>newest first</span></div>
-                <button type="button" className="ws-picker-row is-auto" onClick={() => pasteContext('auto')}>
-                  <b>✨ Most relevant to my message</b><span>{draft.trim() ? 'ranked by your draft' : 'type a question first for best results'}</span>
+          <div className="wx-compose-wrap">
+            <div className={`wx-composer ${pickerOpen ? 'has-picker' : ''}`}>
+              {pickerOpen && (
+                <div className="wx-picker" role="dialog" aria-label="Insert a Memty context">
+                  <div className="wx-picker-head">
+                    <span><MemtyMark size={13} /> Insert context into {shortName(provider)}</span>
+                    <kbd>Esc</kbd>
+                  </div>
+                  <button type="button" className="wx-picker-row is-auto" onClick={() => pasteContext('auto')}>
+                    <span className="wx-picker-icon"><Icon name="sparkles" size={15} /></span>
+                    <span className="wx-picker-main">
+                      <b>Most relevant to my message</b>
+                      <small>{draft.trim() ? 'Ranked against your draft' : 'Type a question first for the best match'}</small>
+                    </span>
+                  </button>
+                  <div className="wx-picker-label">Saved contexts</div>
+                  {contexts.map((ctx) => {
+                    const facts = contextFacts(ctx);
+                    const preview = compileCapsule(facts, provider, trusted, budget);
+                    return (
+                      <button key={ctx.id} type="button" className="wx-picker-row" onClick={() => pasteContext(ctx)}>
+                        <span className="wx-picker-icon"><Icon name="box" size={15} /></span>
+                        <span className="wx-picker-main">
+                          <b>{ctx.title}</b>
+                          <small>{facts.length} fact{facts.length === 1 ? '' : 's'} · {ctx.namespace} · {timeAgo(ctx.createdAt)}</small>
+                        </span>
+                        {!preview.ok && <span className="wx-pill is-secret">Secret</span>}
+                        {preview.ok && preview.redacted > 0 && <span className="wx-pill is-confidential">{preview.redacted} private</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <textarea
+                ref={composerRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+                placeholder={`Message ${shortName(provider)}`}
+                rows={Math.min(9, Math.max(2, draft.split('\n').length))}
+                aria-label={`Message ${shortName(provider)}`}
+              />
+              <div className="wx-composer-bar">
+                <button type="button" className={`wx-memty ${pickerOpen ? 'is-on' : ''}`} onClick={() => setPickerOpen((o) => !o)} aria-expanded={pickerOpen}>
+                  <MemtyMark size={15} /> Memty <kbd>Alt M</kbd>
                 </button>
-                {contexts.map((ctx) => {
-                  const facts = contextFacts(ctx);
-                  const preview = compileCapsule(facts, provider, trusted, budget);
-                  return (
-                    <button key={ctx.id} type="button" className="ws-picker-row" onClick={() => pasteContext(ctx)}>
-                      <b>{ctx.title}</b>
-                      <span>
-                        {facts.length} fact{facts.length === 1 ? '' : 's'} · {ctx.namespace} · {timeAgo(ctx.createdAt)}
-                        {!preview.ok && <em className="is-bad"> · has a SECRET</em>}
-                        {preview.ok && preview.redacted > 0 && <em> · {preview.redacted} private</em>}
-                      </span>
-                    </button>
-                  );
-                })}
+                <span className={`wx-gate ${provider.kind === 'local' ? 'is-local' : ''}`}>
+                  <i />{provider.kind === 'local' ? 'Local model · secrets may be used' : 'Cloud · privacy gate on'}
+                </span>
+                <button type="button" className="wx-send" onClick={send} disabled={!draft.trim() || typing} aria-label="Send">
+                  <Icon name="arrowUp" size={16} />
+                </button>
               </div>
-            )}
-            <textarea
-              ref={composerRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={`Message ${provider.name}… (Alt+M for ⚡ Memty)`}
-              rows={Math.min(9, Math.max(2, draft.split('\n').length))}
-              aria-label={`Message ${provider.name}`}
-            />
-            <div className="ws-composer-bar">
-              <button type="button" className={`ws-zap ${pickerOpen ? 'is-on' : ''}`} onClick={() => setPickerOpen((o) => !o)} aria-expanded={pickerOpen}>
-                ⚡ Memty <kbd>Alt+M</kbd>
-              </button>
-              <span className="ws-composer-note">{provider.kind === 'local' ? 'Local model: secrets may be used here' : 'Cloud assistant: privacy gate applies'}</span>
-              <button type="button" className="mt-btn mt-btn-primary mt-btn-sm" onClick={send} disabled={!draft.trim() || typing}>Send</button>
             </div>
+            <p className="wx-disclaimer">Simulated {shortName(provider)} tab. No model is called and nothing is uploaded.</p>
           </div>
         </section>
 
-        {/* ── Inspector pane ─────────────────────────────────── */}
-        <aside className="ws-pane ws-inspect" aria-label="Inspector">
-          <div className="ws-card">
-            <div className="ws-card-head"><h3>Guided tour</h3><span>{progress}%</span></div>
-            <ol className="ws-tasks">
-              {TASKS.map((t) => {
-                const done = state.done.includes(t.id);
-                return (
-                  <li key={t.id} className={done ? 'is-done' : ''}>
-                    <span className="ws-task-check">{done ? '✓' : ''}</span>
-                    <div><b>{t.title}</b><span>{t.hint}</span></div>
-                  </li>
-                );
-              })}
-            </ol>
-            {progress === 100 && (
-              <div className="ws-done">
-                You’ve seen the whole loop. Now make it real: <code>pip install memty</code>
+        {/* ── Inspector ──────────────────────────────────────── */}
+        <aside className="wx-pane wx-insp" aria-label="Inspector">
+          <div className="wx-itabs" role="tablist" aria-label="Inspector">
+            {([
+              ['tour', 'Tour', 'flag', `${state.done.length}/${TASKS.length}`],
+              ['capsule', 'Capsule', 'box', inspectCapsule?.ok ? `${inspectCapsule.tokens}` : ''],
+              ['terminal', 'CLI', 'terminal', ''],
+              ['receipts', 'Receipts', 'receipt', state.receipts.length ? String(state.receipts.length) : ''],
+            ] as const).map(([id, label, icon, badge]) => (
+              <button key={id} type="button" role="tab" aria-selected={itab === id} className={itab === id ? 'is-on' : ''} onClick={() => setItab(id)}>
+                <Icon name={icon} size={14} />{label}{badge && <span>{badge}</span>}
+              </button>
+            ))}
+          </div>
+
+          <div className="wx-insp-body">
+            {itab === 'tour' && (
+              <div className="wx-tour">
+                <div className="wx-tour-head">
+                  <div>
+                    <h3>Guided tour</h3>
+                    <p>Seven steps through the whole Memty loop.</p>
+                  </div>
+                  <span className="wx-tour-pct">{progress}%</span>
+                </div>
+                <div className="wx-bar"><i style={{ width: `${progress}%` }} /></div>
+                <ol className="wx-steps">
+                  {TASKS.map((t, i) => {
+                    const done = state.done.includes(t.id);
+                    const current = currentTask?.id === t.id;
+                    return (
+                      <li key={t.id} className={`${done ? 'is-done' : ''} ${current ? 'is-current' : ''}`}>
+                        <span className="wx-step-n">{done ? <Icon name="check" size={12} /> : i + 1}</span>
+                        <div>
+                          <b>{t.title}</b>
+                          {(current || done) && <span>{t.hint}</span>}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {progress === 100 && (
+                  <div className="wx-done">
+                    <b>You have seen the whole loop.</b>
+                    <span>Make it real on your machine:</span>
+                    <code>pip install memty</code>
+                  </div>
+                )}
               </div>
             )}
-          </div>
 
-          <div className="ws-card">
-            <div className="ws-card-head">
-              <h3>What {provider.name} would receive</h3>
-              {inspectCapsule?.ok && <span>{inspectCapsule.tokens} tok</span>}
-            </div>
-            {inspectContext ? (
-              <>
-                <p className="ws-card-sub">Context: <b>{inspectContext.title}</b></p>
-                {inspectCapsule && !inspectCapsule.ok ? (
-                  <div className="ws-blocked">
-                    <b>Request stopped</b>
-                    <span>“{slotLabel(inspectCapsule.stoppedBy!.slot)}” is SECRET. Cloud assistants never receive it; switch to Ollama (local).</span>
+            {itab === 'capsule' && (
+              <div className="wx-cap">
+                <div className="wx-cap-head">
+                  <BrandIcon id={provider.id} size={22} />
+                  <div>
+                    <h3>What {shortName(provider)} receives</h3>
+                    <p>{provider.kind === 'local' ? 'Local model: Confidential values stay readable on your machine' : 'Cloud assistant: the privacy gate applies'}</p>
                   </div>
+                </div>
+
+                {inspectContext ? (
+                  <>
+                    <label className="wx-field">
+                      <span>Context</span>
+                      <div className="wx-select">
+                        <select value={inspectContext.id} onChange={(e) => setInspectId(e.target.value)}>
+                          {contexts.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                        </select>
+                        <Icon name="chevron" size={14} />
+                      </div>
+                    </label>
+
+                    {inspectCapsule && !inspectCapsule.ok ? (
+                      <div className="wx-blocked">
+                        <Icon name="ban" size={18} />
+                        <div>
+                          <b>Request stopped</b>
+                          <span>“{slotLabel(inspectCapsule.stoppedBy!.slot)}” is Secret. Cloud assistants never receive it. Switch to Ollama to use it locally.</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="wx-code">
+                        <div className="wx-code-head">
+                          <span>capsule.txt</span>
+                          <span className="wx-mono">{inspectCapsule?.tokens ?? 0} tokens</span>
+                          <button type="button" onClick={copyCapsule} title="Copy capsule" aria-label="Copy capsule"><Icon name="copy" size={13} /></button>
+                        </div>
+                        <pre>{inspectCapsule?.text || '(nothing in this context may be shared)'}</pre>
+                      </div>
+                    )}
+
+                    <div className="wx-section-label">Privacy gate decisions</div>
+                    <ul className="wx-decisions">
+                      {inspectCapsule?.decisions.map((d) => {
+                        const sent = d.action === 'share' && inspectCapsule.included.includes(d.fact);
+                        const outcome = d.action === 'share' ? (sent ? 'Sent' : 'Over budget')
+                          : d.action === 'redact' ? 'Masked' : d.action === 'withhold' ? 'Withheld' : 'Stops send';
+                        const icon = d.action === 'share' ? (sent ? 'check' : 'minus') : d.action === 'redact' ? 'eyeOff' : d.action === 'withhold' ? 'minus' : 'ban';
+                        return (
+                          <li key={d.fact.id} className={`is-${d.action} ${d.action === 'share' && !sent ? 'is-over' : ''}`}>
+                            <span className="wx-dec-key">{slotLabel(d.fact.slot)}</span>
+                            <LevelTag level={d.fact.sensitivity} />
+                            <span className="wx-dec-out"><Icon name={icon} size={12} />{outcome}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    <label className="wx-range">
+                      <span>Token budget</span><b className="wx-mono">{budget}</b>
+                      <input type="range" min={20} max={400} step={10} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
+                    </label>
+                  </>
                 ) : (
-                  <pre className="ws-capsule">{inspectCapsule?.text || '(nothing may be shared)'}</pre>
+                  <div className="wx-empty"><Icon name="box" size={20} /><b>No contexts yet</b><span>Save some facts to preview a capsule.</span></div>
                 )}
-                <ul className="ws-decisions">
-                  {inspectCapsule?.decisions.map((d) => (
-                    <li key={d.fact.id} className={`is-${d.action}`}>
-                      <span>{slotLabel(d.fact.slot)}</span>
-                      <Level level={d.fact.sensitivity} />
-                      <em>
-                        {d.action === 'share' && (inspectCapsule.included.includes(d.fact) ? 'sent' : 'over budget')}
-                        {d.action === 'redact' && '→ [private]'}
-                        {d.action === 'withhold' && 'withheld'}
-                        {d.action === 'stop' && 'stops send'}
-                      </em>
-                    </li>
-                  ))}
+
+                <div className="wx-section-label">Trusted assistants <small>may see Internal and Confidential</small></div>
+                <ul className="wx-trust">
+                  {PROVIDERS.filter((p) => p.kind === 'cloud').map((p) => {
+                    const on = vault.trusted.includes(p.id);
+                    return (
+                      <li key={p.id}>
+                        <BrandIcon id={p.id} size={18} />
+                        <span>{p.name}</span>
+                        <button type="button" role="switch" aria-checked={on} aria-label={`Trust ${p.name}`} className={`wx-switch ${on ? 'is-on' : ''}`} onClick={() => toggleTrusted(p.id)}><i /></button>
+                      </li>
+                    );
+                  })}
                 </ul>
-                <label className="ws-budget">
-                  <span>Token budget <b>{budget}</b></span>
-                  <input type="range" min={20} max={400} step={10} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
-                </label>
-              </>
-            ) : <p className="ws-card-sub">Save some facts to see a capsule.</p>}
-            <div className="ws-trust">
-              <span>Trusted assistants <small>(may see INTERNAL and CONFIDENTIAL)</small></span>
-              <div>
-                {PROVIDERS.filter((p) => p.kind === 'cloud').map((p) => (
-                  <button key={p.id} type="button" className={vault.trusted.includes(p.id) ? 'is-on' : ''} onClick={() => toggleTrusted(p.id)}>
-                    {vault.trusted.includes(p.id) ? '✓ ' : ''}{p.name}
-                  </button>
-                ))}
               </div>
-            </div>
-          </div>
+            )}
 
-          <div className="ws-card">
-            <div className="ws-card-head"><h3>Same thing in the terminal</h3></div>
-            <pre className="ws-cli">{cli.map((line) => (line.startsWith('#') ? line : `$ ${line}`)).join('\n')}</pre>
-          </div>
+            {itab === 'terminal' && (
+              <div className="wx-term-wrap">
+                <p className="wx-insp-note">Every action in this workspace has a CLI equivalent. This is what you just did:</p>
+                <div className="wx-term">
+                  <div className="wx-term-bar"><i /><i /><i /><span>~ zsh</span></div>
+                  <pre>
+                    {cli.map((line, i) => (line.startsWith('#')
+                      ? <span key={i} className="wx-term-c">{line}{'\n'}</span>
+                      : <span key={i}><span className="wx-term-p">$ </span>{line}{'\n'}</span>))}
+                  </pre>
+                </div>
+              </div>
+            )}
 
-          <div className="ws-card">
-            <div className="ws-card-head"><h3>Context receipts</h3><span>no values stored</span></div>
-            {state.receipts.length === 0 ? (
-              <p className="ws-card-sub">Every capsule leaves a receipt: who got it, how many facts, how many tokens. Paste one to see.</p>
-            ) : (
-              <ul className="ws-receipts">
-                {state.receipts.slice(0, 6).map((r) => (
-                  <li key={r.id} className={r.blocked ? 'is-blocked' : ''}>
-                    <b>{r.provider}</b>
-                    <span>{r.blocked ? 'blocked: SECRET matched' : `${r.facts} facts · ${r.tokens} tok${r.redacted ? ` · ${r.redacted} private` : ''}`}</span>
-                    <em>{r.context}</em>
-                  </li>
-                ))}
-              </ul>
+            {itab === 'receipts' && (
+              <div className="wx-receipts-wrap">
+                <p className="wx-insp-note">Every capsule leaves a receipt: who received it, how many facts and tokens. Values are never stored in receipts.</p>
+                {state.receipts.length === 0 ? (
+                  <div className="wx-empty"><Icon name="receipt" size={20} /><b>No receipts yet</b><span>Insert a context with Memty to create one.</span></div>
+                ) : (
+                  <ul className="wx-receipts">
+                    {state.receipts.slice(0, 12).map((r) => (
+                      <li key={r.id} className={r.blocked ? 'is-blocked' : ''}>
+                        <BrandIcon id={providerByName(r.provider)?.id ?? ''} size={22} />
+                        <div>
+                          <b>{r.provider}</b>
+                          <span>{r.context} · {timeAgo(r.at)}</span>
+                        </div>
+                        <em className="wx-mono">{r.blocked ? 'Blocked' : `${r.facts} facts · ${r.tokens} tok${r.redacted ? ` · ${r.redacted} masked` : ''}`}</em>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         </aside>
@@ -712,29 +959,34 @@ export default function Workspace() {
 
       {/* ── Review dialog ─────────────────────────────────────── */}
       {review && (
-        <div className="ws-modal" role="dialog" aria-modal="true" aria-label="Review facts before saving" onClick={(e) => { if (e.target === e.currentTarget) setReview(null); }}>
-          <div className="ws-modal-card">
-            <div className="ws-modal-head">
-              <h3>Review before saving</h3>
-              <p>Memty proposed these facts using local rules: no model, no network. Edit or untick anything.</p>
+        <div className="wx-modal" role="dialog" aria-modal="true" aria-label="Review facts before saving" onClick={(e) => { if (e.target === e.currentTarget) setReview(null); }}>
+          <div className="wx-modal-card">
+            <div className="wx-modal-head">
+              <span className="wx-modal-mark"><MemtyMark size={18} /></span>
+              <div>
+                <h3>Review before saving</h3>
+                <p>Proposed with local rules: no model and no network. Edit or untick anything.</p>
+              </div>
+              <button type="button" className="wx-icon-btn" onClick={() => setReview(null)} aria-label="Close"><Icon name="x" size={15} /></button>
             </div>
-            <div className="ws-modal-meta">
-              <label>Namespace<input value={review.namespace} onChange={(e) => setReview({ ...review, namespace: e.target.value })} /></label>
-              <label>Context title<input value={review.title} onChange={(e) => setReview({ ...review, title: e.target.value })} /></label>
+            <div className="wx-modal-meta">
+              <label className="wx-field"><span>Namespace</span><input value={review.namespace} onChange={(e) => setReview({ ...review, namespace: e.target.value })} /></label>
+              <label className="wx-field"><span>Context title</span><input value={review.title} onChange={(e) => setReview({ ...review, title: e.target.value })} /></label>
             </div>
-            <div className="ws-proposals">
+            <div className="wx-props">
+              <div className="wx-props-head"><span /><span>Title</span><span>Value</span><span>Sensitivity</span></div>
               {review.proposals.map((p, i) => (
-                <div key={p.id} className={`ws-proposal ${p.selected ? '' : 'is-off'}`}>
+                <div key={p.id} className={`wx-prop ${p.selected ? '' : 'is-off'}`}>
                   <input
                     type="checkbox" checked={p.selected} aria-label={`Keep ${p.title}`}
                     onChange={(e) => setReview({ ...review, proposals: review.proposals.map((q, j) => (j === i ? { ...q, selected: e.target.checked } : q)) })}
                   />
                   <input
-                    className="ws-proposal-title" value={p.title} aria-label="Title"
+                    className="wx-prop-title" value={p.title} aria-label="Title"
                     onChange={(e) => setReview({ ...review, proposals: review.proposals.map((q, j) => (j === i ? { ...q, title: e.target.value } : q)) })}
                   />
                   <input
-                    className="ws-proposal-value" value={p.value} aria-label="Value"
+                    className="wx-prop-value" value={p.value} aria-label="Value"
                     onChange={(e) => {
                       const value = e.target.value;
                       setReview({
@@ -745,36 +997,43 @@ export default function Workspace() {
                       });
                     }}
                   />
-                  <select
-                    value={p.sensitivity} aria-label="Sensitivity"
-                    className={`lvl-select lvl-${p.sensitivity.toLowerCase()}`}
-                    onChange={(e) => {
-                      const level = e.target.value as Sensitivity;
-                      if (p.sensitivity === 'SECRET' && looksLikeCredential(p.value) && level !== 'SECRET') {
-                        notify('Credentials stay SECRET. Only the terminal can change that.', 'warn');
-                        return;
-                      }
-                      setReview({ ...review, proposals: review.proposals.map((q, j) => (j === i ? { ...q, sensitivity: level } : q)) });
-                    }}
-                  >
-                    {SENSITIVITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  {p.note && <span className="ws-proposal-note">{p.note}</span>}
+                  <div className={`wx-select is-${p.sensitivity.toLowerCase()}`}>
+                    <select
+                      value={p.sensitivity} aria-label="Sensitivity"
+                      onChange={(e) => {
+                        const level = e.target.value as Sensitivity;
+                        if (p.sensitivity === 'SECRET' && looksLikeCredential(p.value) && level !== 'SECRET') {
+                          notify('Credentials stay Secret. Only the terminal can change that.', 'warn');
+                          return;
+                        }
+                        setReview({ ...review, proposals: review.proposals.map((q, j) => (j === i ? { ...q, sensitivity: level } : q)) });
+                      }}
+                    >
+                      {SENSITIVITIES.map((s) => <option key={s} value={s}>{LEVEL_LABEL[s]}</option>)}
+                    </select>
+                    <Icon name="chevron" size={13} />
+                  </div>
+                  {p.note && <span className="wx-prop-note"><Icon name="alert" size={12} />{p.note}</span>}
                 </div>
               ))}
             </div>
-            <div className="ws-modal-foot">
+            <div className="wx-modal-foot">
               <span>{review.proposals.filter((p) => p.selected).length} of {review.proposals.length} selected · max 40 tokens per fact</span>
               <div>
-                <button type="button" className="mt-btn mt-btn-ghost mt-btn-sm" onClick={() => setReview(null)}>Cancel</button>
-                <button type="button" className="mt-btn mt-btn-primary mt-btn-sm" onClick={commitReview}>Save to vault</button>
+                <button type="button" className="wx-btn is-ghost" onClick={() => setReview(null)}>Cancel</button>
+                <button type="button" className="wx-btn is-primary" onClick={commitReview}>Save to vault</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {toast && <div className={`ws-toast is-${toast.tone}`} role="status">{toast.text}</div>}
+      {toast && (
+        <div className={`wx-toast is-${toast.tone}`} role="status">
+          <Icon name={toast.tone === 'ok' ? 'check' : toast.tone === 'warn' ? 'alert' : 'ban'} size={15} />
+          <span>{toast.text}</span>
+        </div>
+      )}
     </div>
   );
 }

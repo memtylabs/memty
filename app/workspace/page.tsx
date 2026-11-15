@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Workspace from '@/components/workspace/workspace';
+import './workspace.css';
 
 export const metadata: Metadata = {
   title: 'Memty demo workspace: try persistent AI memory in your browser',

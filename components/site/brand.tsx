@@ -41,13 +41,13 @@ export function GitHubIcon() {
   );
 }
 
-export function SiteNav({ current }: { current?: 'home' | 'workspace' }) {
+export function SiteNav({ current }: { current?: 'home' | 'workspace' | 'docs' }) {
   return (
     <header className="mt-nav">
       <div className="mt-nav-inner">
         <MemtyLogo />
         <nav className="mt-nav-links" aria-label="Main">
-          {current === 'workspace' ? (
+          {current !== 'home' ? (
             <>
               <Link href="/#how">How it works</Link>
               <Link href="/#install">Install</Link>
@@ -66,7 +66,7 @@ export function SiteNav({ current }: { current?: 'home' | 'workspace' }) {
           <a className="mt-icon-link" href={GITHUB_URL} target="_blank" rel="noreferrer" aria-label="Memty on GitHub">
             <GitHubIcon />
           </a>
-          {current === 'workspace' ? (
+          {current !== 'home' ? (
             <Link className="mt-btn mt-btn-primary mt-btn-sm" href="/#install">Install Memty</Link>
           ) : (
             <Link className="mt-btn mt-btn-primary mt-btn-sm" href="/workspace">Try the demo</Link>
@@ -84,7 +84,7 @@ export function SiteFooter() {
         <div className="mt-footer-brand">
           <MemtyLogo />
           <p>Persistent memory for AI assistants and agents. One local vault, every tool, owned by you.</p>
-          <p className="mt-footer-meta">MIT licensed · alpha (0.x) · no account, no cloud, no telemetry</p>
+          <p className="mt-footer-meta">Fair Source (FSL-1.1-ALv2) · alpha (0.x) · no account, no cloud, no telemetry</p>
         </div>
         <div className="mt-footer-cols">
           <div>
@@ -97,6 +97,7 @@ export function SiteFooter() {
           <div>
             <h4>Resources</h4>
             <a href={DOCS_URL} target="_blank" rel="noreferrer">Package docs</a>
+            <Link href="/api-reference">API reference</Link>
             <a href={CHANGELOG_URL} target="_blank" rel="noreferrer">Changelog</a>
             <a href={BENCHMARK_URL} target="_blank" rel="noreferrer">Benchmark method</a>
             <a href={SECURITY_URL} target="_blank" rel="noreferrer">Security tests</a>
@@ -106,7 +107,7 @@ export function SiteFooter() {
             <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
             <a href={PYPI_URL} target="_blank" rel="noreferrer">PyPI</a>
             <Link href="/privacy">Privacy notice</Link>
-            <Link href="/terms">Terms</Link>
+            <Link href="/terms">Terms of use</Link>
           </div>
         </div>
       </div>
