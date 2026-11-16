@@ -406,6 +406,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self._update(body)
             elif url.path == "/facts/delete":
                 self._delete(body)
+            elif url.path == "/facts/delete-all":
+                self._delete_all(body)
             else:
                 self._error(HTTPStatus.NOT_FOUND, "not_found", "Unknown route.")
         except ValueError as error:
@@ -595,6 +597,18 @@ class BridgeHandler(BaseHTTPRequestHandler):
         # forget() tombstones the slot and purges its history; chat extraction can't bring it back.
         result = self.server.ledger.forget(namespace, slot)
         self._send(HTTPStatus.OK, {"namespace": namespace, "slot": slot, "deleted": result is not None})
+
+    def _delete_all(self, body: dict) -> None:
+        """Forget every fact in one namespace, private ones included."""
+        namespace = self._namespace(body.get("namespace"))
+        # The caller repeats the namespace, so a stray or malformed request can't wipe one.
+        if str(body.get("confirm", "")).strip() != namespace:
+            raise ValueError("confirm must repeat the namespace to delete all of its facts")
+        deleted = 0
+        for fact in self.server.ledger.list(namespace=namespace):
+            if self.server.ledger.forget(fact_id=fact["id"]) is not None:
+                deleted += 1
+        self._send(HTTPStatus.OK, {"namespace": namespace, "deleted": deleted})
 
     def _save(self, body: dict) -> None:
         namespace = str(body.get("namespace", "")).strip()
