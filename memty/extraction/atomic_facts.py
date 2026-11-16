@@ -435,7 +435,7 @@ def extract_ollama(text: str, model: str, *, host: str = "http://127.0.0.1:11434
 def _flag_credentials(facts: list[dict]) -> list[dict]:
     """Mark proposals holding a key or password; the ledger stores them as SECRET too."""
     for fact in facts:
-        if looks_like_credential(fact.get("value", "")):
+        if looks_like_credential(fact.get("value", ""), fact.get("slot")):
             fact["sensitivity"] = "SECRET"
     return facts
 
