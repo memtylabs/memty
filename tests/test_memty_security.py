@@ -294,6 +294,46 @@ class CredentialTests(VaultCase):
             with self.subTest(value=value):
                 self.assertEqual(self.ledger.record("p", slot, value)["sensitivity"], "PUBLIC")
 
+    def test_title_naming_a_secret_makes_the_value_secret(self):
+        # Extraction moves "Admin password" into the title, leaving a bare value.
+        for slot, value in [("admin_password", "Tr0ub4dor&3"), ("door_pin", "4821"),
+                            ("db_login", "admin / S3cr3t!Pass"), ("token", "9a8b7c6d5e4f3a2b"),
+                            ("env_setup", "OPENAI_API_KEY=q8Zr4TfW2nLp7XcV"),
+                            ("env", "DB_PASSWORD=hunter22"),
+                            ("stripe_env", "STRIPE_SECRET_KEY=q8Zr4TfW2nLp7XcV"),
+                            ("acceso", "contraseña: Gato2024Azul"),
+                            ("aws_key_id", ("AK" + "IAIOSFODNN7EXAMPLE").lower())]:
+            with self.subTest(slot=slot, value=value):
+                self.assertEqual(self.ledger.record("p", slot, value)["sensitivity"], "SECRET")
+
+    def test_secret_sounding_titles_and_placeholders_stay_public(self):
+        for slot, value in [("password", "must be at least 12 characters"),
+                            ("password_policy", "strict, 12+ chars"), ("api_key", "stored in Vault"),
+                            ("config_default", "secret = None"), ("pin", "none"),
+                            ("token_count", "4096"), ("token_limit", "128k per request"),
+                            ("pass_rate", "98.5%"), ("login", "rohan2024@example.com"),
+                            ("login_page", "/auth/v2 route"), ("sign_in", "with Google SSO"),
+                            ("topic", "spin: 12345"), ("version", "v2.3.1-beta2"),
+                            ("plan", "task-risk-assessment-framework-for-q4-2026")]:
+            with self.subTest(slot=slot, value=value):
+                self.assertEqual(self.ledger.record("p", slot, value)["sensitivity"], "PUBLIC")
+
+    def test_reviewed_context_with_a_titled_password_never_reaches_cloud(self):
+        self.ledger.record_context("work.project", [
+            {"slot": "editor", "value": "VS Code"},
+            {"slot": "admin_password", "value": "Tr0ub4dor&3"}])
+        ids = [f["id"] for f in self.ledger.list(namespace="work.project")]
+        with self.assertRaises(LocalRoutingRequired):
+            self.ledger.context_selected("work.project", ids, provider="chatgpt")
+
+    def test_extraction_flags_a_password_named_only_in_the_title(self):
+        from memty.extraction.atomic_facts import extract_facts
+        facts = extract_facts("- Editor: VS Code\n- Admin password: Tr0ub4dor&3\n")["facts"]
+        flagged = [f for f in facts if "Tr0ub4dor" in f["value"]]
+        self.assertTrue(flagged)
+        for fact in flagged:
+            self.assertEqual(fact.get("sensitivity"), "SECRET", fact)
+
     def test_reviewed_browser_context_with_a_key_never_reaches_cloud(self):
         self.ledger.record_context("work.project", [
             {"slot": "editor", "value": "VS Code"},

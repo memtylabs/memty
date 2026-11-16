@@ -448,7 +448,7 @@ class MemtyLedger:
         sensitivity = {"PERSONAL": "INTERNAL"}.get(sensitivity, sensitivity)
         if sensitivity not in _SENSITIVITY_LEVELS:
             raise ValueError("sensitivity must be PUBLIC, INTERNAL, CONFIDENTIAL or SECRET")
-        if looks_like_credential(value):
+        if looks_like_credential(value, slot):
             sensitivity = "SECRET"  # a pasted key or password never becomes shareable
 
         allowed = sorted({str(item).casefold() for item in (allowed_providers or [])})
@@ -581,7 +581,7 @@ class MemtyLedger:
                             blocked_providers,ephemeral_redaction,created_at,updated_at
                         ) VALUES(?,?,?,?,?,1.0,'USER_CONFIRMED',?,?,1,0,?,?,?,?,?)
                     """, ("mem_" + uuid.uuid4().hex, self.user_id, namespace, actual_slot, value,
-                          "SECRET" if looks_like_credential(value) else policy.get("sensitivity", "PUBLIC"), batch,
+                          "SECRET" if looks_like_credential(value, slot) else policy.get("sensitivity", "PUBLIC"), batch,
                           json.dumps(sorted(allowed)) if allowed is not None else "[]",
                           json.dumps(sorted(policy.get("blocked", ()))),
                           int(policy.get("ephemeral", False)), now, now))
@@ -1044,7 +1044,7 @@ class MemtyLedger:
         sensitivity = str(sensitivity).upper()
         if sensitivity not in _SENSITIVITY_LEVELS:
             raise ValueError("sensitivity must be PUBLIC, INTERNAL, CONFIDENTIAL or SECRET")
-        if looks_like_credential(value):
+        if looks_like_credential(value, slot):
             sensitivity = "SECRET"
         proposed_by = _client_name(proposed_by, "agent")
         reason = " ".join(str(reason or "").split())[:200]
