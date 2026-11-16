@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const contentScript = fs.readFileSync(path.join(__dirname, '../memty/integrations/browser/extension/content.js'), 'utf8');
+const guardScript = fs.readFileSync(path.join(__dirname, '../memty/integrations/browser/extension/guard.js'), 'utf8');
 const chromeCandidates = [process.env.MEMTY_TEST_CHROME,
   process.platform === 'win32' && 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   process.platform === 'darwin' && '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -102,6 +103,16 @@ test('dragging and selected-text review work on a ChatGPT-style page',
       await until(() => evaluate('document.readyState'), (state) => state === 'complete', 'fixture page');
       const fixture = await evaluate(`({ url: location.href, editor: !!document.querySelector('#prompt-textarea'), title: document.title })`);
       assert.ok(fixture.editor, `fixture editor missing: ${JSON.stringify(fixture)}`);
+      // guard.js runs at document_start, before the page's own scripts. The page then
+      // does what ChatGPT does: typing outside a text field moves focus to the prompt box.
+      await evaluate(guardScript);
+      await evaluate(`window.addEventListener('keydown', (event) => {
+        const target = event.target;
+        if (target.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          document.querySelector('#prompt-textarea').focus();
+        }
+      }, true);`);
       await evaluate(`
         window.__memtyStore = {};
         window.__memtyMessages = [];
@@ -296,10 +307,30 @@ test('dragging and selected-text review work on a ChatGPT-style page',
       await evaluate(`(() => { const project = document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.project');
         const select = project.querySelector('select'); select.value = '__new__'; select.dispatchEvent(new Event('change'));
         project.querySelector('input').value = 'project.api'; })()`);
+
+      // Rename the fact and edit its text with real key presses: the keys must stay in
+      // the Memty fields and never reach the page's prompt box.
+      const promptBefore = await evaluate(`document.querySelector('#prompt-textarea').innerText`);
+      const typeInto = async (selector, text, { replace }) => {
+        await evaluate(`(() => { const field = document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('${selector}');
+          field.focus(); ${replace ? 'field.select();' : 'field.setSelectionRange(field.value.length, field.value.length);'} })()`);
+        for (const key of text) {
+          await send('Input.dispatchKeyEvent', { type: 'keyDown', key, text: key, unmodifiedText: key });
+          await send('Input.dispatchKeyEvent', { type: 'keyUp', key });
+        }
+      };
+      await typeInto('.fact .label', 'Cache policy', { replace: true });
+      await typeInto('.fact textarea', ' Always', { replace: false });
+      const edited = await evaluate(`(() => { const root = document.querySelector('[data-memty-bridge]').shadowRoot;
+        return { title: root.querySelector('.fact .label').value, value: root.querySelector('.fact textarea').value }; })()`);
+      assert.deepEqual(edited, { title: 'Cache policy', value: 'Keep the cache local. Always' });
+      assert.equal(await evaluate(`document.querySelector('#prompt-textarea').innerText`), promptBefore,
+        'typing in the review panel must not reach the chat prompt');
+
       await evaluate(`document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.card .primary').click()`);
       const saved = await until(() => evaluate(`window.__memtyMessages.find((m) => m.type === 'save')`),
         Boolean, 'reviewed facts to save');
-      assert.deepEqual(saved.facts, [{ slot: 'decision', value: 'Keep the cache local.' }]);
+      assert.deepEqual(saved.facts, [{ slot: 'cache_policy', value: 'Keep the cache local. Always' }]);
       assert.equal(saved.namespace, 'project.api');
 
       await evaluate(`(() => { const answer = document.querySelector('#answer'); answer.textContent = 'word '.repeat(10001);
