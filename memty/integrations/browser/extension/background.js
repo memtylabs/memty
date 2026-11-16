@@ -156,10 +156,12 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 // After install or update, put the fresh script into chat tabs that are already
 // open. The stale copy there removes itself, so no page refresh is needed.
 chrome.runtime.onInstalled.addListener(async () => {
-  const { content_scripts: [script] } = chrome.runtime.getManifest();
-  const tabs = await chrome.tabs.query({ url: script.matches });
+  // Every entry in order: the keyboard guard (guard.js) goes in before content.js.
+  const { content_scripts: scripts } = chrome.runtime.getManifest();
+  const files = scripts.flatMap((script) => script.js);
+  const tabs = await chrome.tabs.query({ url: scripts[scripts.length - 1].matches });
   await Promise.all(tabs.map((tab) => chrome.scripting
-    .executeScript({ target: { tabId: tab.id }, files: script.js })
+    .executeScript({ target: { tabId: tab.id }, files })
     .catch(() => {}))); // discarded or restricted tabs: they load it on next visit
   pair().catch(() => {}); // pair early if the bridge is already running
 });
