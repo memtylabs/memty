@@ -39,6 +39,7 @@ Click **☰** on the pill, or the extension icon, to open **Your Memty facts**. 
 - edit a fact's title or value, or add a new fact
 - mark a fact **Private**: chat AIs only see `[private]`, and the value is never shown in the browser
 - delete a fact: Memty forgets it completely, including its history, and saving from a chat can't bring it back
+- **Delete all**: forget every fact in the selected namespace at once, private ones included, after one confirmation. Other namespaces are untouched.
 
 ## Privacy and security
 

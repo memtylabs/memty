@@ -136,6 +136,7 @@ function row(fact) {
 }
 
 function render() {
+  $("deleteAll").disabled = !facts.length;
   const query = $("search").value.trim().toLowerCase();
   const shown = facts.filter((f) => !query || `${label(f.slot)} ${f.value ?? ""}`.toLowerCase().includes(query));
   $("list").replaceChildren(...shown.map(row));
@@ -208,6 +209,24 @@ $("add").addEventListener("click", () => {
   const fresh = row(null);
   $("list").prepend(fresh);
   fresh.querySelector(".title").focus();
+});
+$("deleteAll").addEventListener("click", async () => {
+  const namespace = settings.namespace;
+  const count = facts.length;
+  if (!count) return;
+  const what = count === 1 ? "1 fact" : `all ${count} facts`;
+  if (!confirm(`Delete ${what} in "${namespace}"?\n\nThis includes private facts and facts hidden by your search. ` +
+      "Memty will forget them completely, including their history. This can't be undone.")) return;
+  $("deleteAll").disabled = true;
+  try {
+    const { deleted } = await api("/facts/delete-all", { namespace, confirm: namespace });
+    status(`Deleted ${deleted} fact${deleted === 1 ? "" : "s"} from "${namespace}".`, "ok");
+    await loadNamespaces();
+    await loadFacts();
+  } catch (error) {
+    status(error.message, "bad");
+    render();
+  }
 });
 $("saveConn").addEventListener("click", async () => {
   await chrome.storage.local.set({ port: Number($("port").value) || 8765, token: $("token").value.trim() });

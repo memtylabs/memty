@@ -592,6 +592,26 @@ class BridgeTests(unittest.TestCase):
         status, body, _ = self.request("GET", "/facts?namespace=work.project")
         self.assertEqual(sorted(f["slot"] for f in body["facts"]), ["main_editor"])
 
+    def test_user_can_delete_all_facts_in_one_namespace(self):
+        self.ledger.record("other.project", "editor", "Zed")
+        before = len(self.ledger.list(namespace="work.project"))
+        self.assertGreater(before, 1)
+        # Without repeating the namespace nothing is deleted.
+        for confirm in (None, "", "other.project"):
+            status, _, _ = self.request("POST", "/facts/delete-all", {"namespace": "work.project", "confirm": confirm})
+            self.assertEqual(status, 400, confirm)
+        self.assertEqual(len(self.ledger.list(namespace="work.project")), before)
+
+        status, body, _ = self.request("POST", "/facts/delete-all",
+                                       {"namespace": "work.project", "confirm": "work.project"})
+        self.assertEqual((status, body["deleted"]), (200, before))
+        status, body, _ = self.request("GET", "/facts?namespace=work.project")
+        self.assertEqual(body["facts"], [])
+        # Private values are forgotten too, and other namespaces are untouched.
+        self.assertTrue(all(f["tombstone"] and f["value"] == ""
+                            for f in self.ledger.list(namespace="work.project", include_tombstones=True)))
+        self.assertEqual(self.ledger.find("other.project", "editor")["value"], "Zed")
+
     def test_reviewed_saves_replace_older_values_and_keep_privacy(self):
         self.ledger.record("work.project", "client", "Acme Corp", sensitivity="CONFIDENTIAL",
                            verification_state="USER_CONFIRMED")
