@@ -15,6 +15,8 @@ One private, local memory vault for every AI assistant you use.</p>
   <a href="https://memtylabs.github.io/memty/">Website</a> ·
   <a href="https://github.com/memtylabs/memty">GitHub</a> ·
   <a href="https://github.com/memtylabs/memty/blob/main/memty/CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/memtylabs/memty/tree/main/docs#readme">User guides</a> ·
+  <a href="https://github.com/memtylabs/memty/tree/main/examples#readme">Examples</a> ·
   <a href="https://github.com/memtylabs/memty/blob/main/SECURITY.md">Security</a>
 </p>
 
@@ -24,7 +26,7 @@ Memty keeps the facts, decisions and preferences you share with AI in **one SQLi
 - **Works everywhere.** A browser extension for chat websites, MCP for desktop and coding tools, the clipboard for anything else, and a Python API.
 - **You're in control.** Facts saved from chats are proposals you approve. You can edit, mark private, or permanently delete anything.
 - **Private by design.** Private facts reach cloud AIs only as `[private]`. Secrets, including API keys you paste by accident, never leave your machine.
-- **Verified releases.** Every release from 0.2.1 on is built by GitHub Actions and published with PyPI provenance attestations.
+- **Release verification.** Check each file's provenance on PyPI. Version 0.2.1 was uploaded without an attestation; the release workflow supports Trusted Publishing and attestations for future releases.
 
 > **Alpha (0.x).** The vault's storage format is stable and covered by tests. Commands and options may still change between versions.
 

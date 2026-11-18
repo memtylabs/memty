@@ -204,6 +204,31 @@ class PrivacyGateTests(VaultCase):
         result = self.ledger.context("project", provider="openai", namespace="work.project")
         self.assertNotIn("BLUEFIN", json.dumps({k: v for k, v in result.items() if k != "redactions"}))
 
+    def test_unclassified_summary_is_local_only_even_for_trusted_cloud(self):
+        self.ledger.set_summary("work.project", SECRET_VALUE)
+        trusted = MemtyLedger(self.db, trusted_providers=["openai"])
+        try:
+            result = trusted.context("hunter2", provider="openai", namespace="work.project")
+            self.assertNotIn(SECRET_VALUE, json.dumps(result))
+            local = trusted.context("hunter2", provider="ollama", namespace="work.project")
+            self.assertIn(SECRET_VALUE, local["text"])
+        finally:
+            trusted.close()
+
+    def test_summary_respects_local_provider_restrictions(self):
+        self.ledger.record("work.project", "vendor", "Globex", blocked_providers=["ollama"])
+        self.ledger.set_summary("work.project", "vendor=Globex")
+        result = self.ledger.context("vendor", provider="ollama", namespace="work.project")
+        self.assertNotIn("Globex", json.dumps(result))
+
+    def test_forget_discards_summary_and_search_index(self):
+        self.ledger.record("work.project", "codename", "NIGHTJAR")
+        self.ledger.set_summary("work.project", "codename=NIGHTJAR")
+        self.ledger.forget("work.project", "codename")
+        self.assertIsNone(self.ledger.summary("work.project"))
+        result = self.ledger.context("NIGHTJAR", provider="ollama", namespace="work.project")
+        self.assertNotIn("NIGHTJAR", json.dumps(result))
+
     def test_tombstoned_fact_is_never_compiled(self):
         self.ledger.record("work.project", "codename", "NIGHTJAR")
         self.ledger.forget("work.project", "codename")

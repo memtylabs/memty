@@ -127,7 +127,7 @@ class WeekOneTests(unittest.TestCase):
             self.assertLessEqual(compiled["approx_tokens"], budget, compiled["text"])
             self.assertLessEqual(estimate_tokens(compiled["text"]), budget, compiled["text"])
 
-        compiled = self.ledger.context("value number project slot", provider="claude",
+        compiled = self.ledger.context("value number project slot", provider="ollama",
                                        token_budget=600)
         self.assertEqual(compiled["sections"]["summary"], 1)
         self.assertLessEqual(compiled["sections"]["slots"], 32)
@@ -228,7 +228,7 @@ class WeekOneTests(unittest.TestCase):
         self.assertLessEqual(summary["token_count"], 150)
         with self.assertRaises(ValueError):
             self.ledger.set_summary("repo.nexor", "word " * 200)
-        compiled = self.ledger.context("Postgres compiler", provider="claude")
+        compiled = self.ledger.context("Postgres compiler", provider="ollama")
         self.assertIn("<summary", compiled["text"])
         self.assertIn("Nexor uses Postgres", compiled["text"])
 

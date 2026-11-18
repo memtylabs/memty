@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memty"
-version = "0.2.1"
+version = "0.2.2"
 description = "Your AI memory, owned by you: one private, local vault for ChatGPT, Claude, Gemini, Claude Code, Codex, Cursor and any MCP client"
 readme = "memty/README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "RohanNK86" }]
-dependencies = ["mcp>=1.9,<2"]
+dependencies = ["mcp>=1.30,<2"]
 keywords = ["memty", "ai-memory", "portable-memory", "local-first", "privacy", "mcp", "model-context-protocol",
             "llm", "chatgpt", "claude", "gemini", "perplexity", "browser-extension", "sqlite"]
 classifiers = [

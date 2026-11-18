@@ -116,11 +116,18 @@ class ContextCompiler:
                                            provider_key, trusted)
             if strict_namespace and summary is not None and summary["namespace"] != namespace:
                 summary = None
-            sensitive_summary = False
-            if summary is not None and not trusted:
-                sensitive_summary = self.ledger.namespace_has_sensitive(db, summary["namespace"])
-            if sensitive_summary:
+            # Summaries have no per-fact classification or provider rules. They can
+            # contain secrets even when no corresponding active fact exists.
+            if summary is not None and not local:
                 summary = None
+            if summary is not None:
+                summary_rows = db.execute(
+                    "SELECT * FROM atomic_facts WHERE user_id=? AND namespace=? AND tombstone=0",
+                    (self.ledger.user_id, summary["namespace"])).fetchall()
+                if any(not provider_allowed(fact, provider_key, trusted) or
+                       needs_redaction(fact, provider_key, trusted)
+                       for fact in (self.ledger._fact(row) for row in summary_rows)):
+                    summary = None
 
         return self._pack(ranked, summary, provider=provider, provider_key=provider_key,
                           local=local, trusted=trusted, token_budget=token_budget,

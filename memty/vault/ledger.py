@@ -718,6 +718,10 @@ class MemtyLedger:
             # Proposals hold candidate and previous values for this slot as well.
             db.execute("DELETE FROM fact_proposals WHERE user_id=? AND namespace=? AND slot=?",
                        (self.user_id, row["namespace"], row["slot"]))
+            # A summary may contain this fact, including an older value. Its
+            # contents are not tracked per slot, so discard the entire summary.
+            db.execute("DELETE FROM rolling_summaries WHERE user_id=? AND namespace=?",
+                       (self.user_id, row["namespace"]))
             source_id = row["source_id"]
             if purge_raw and source_id:
                 self._drop_unused_raw(db, source_id, except_id=current["id"])
@@ -740,6 +744,7 @@ class MemtyLedger:
         try:
             if self._fts:
                 db.execute("INSERT INTO atomic_facts_fts(atomic_facts_fts) VALUES('optimize')")
+                db.execute("INSERT INTO rolling_summaries_fts(rolling_summaries_fts) VALUES('optimize')")
             db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except sqlite3.Error:
             pass  # another connection holds the WAL; the next checkpoint finishes the job
