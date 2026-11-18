@@ -58,6 +58,15 @@ jobs:
           modules=$(ls tests/test_memty_*.py | sed -e 's#/#.#g' -e 's#\.py$##' | tr '\n' ' ')
           echo "Running: $modules"
           python -m unittest $modules -v
+      - uses: actions/setup-node@v4
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        with:
+          node-version: '22'
+      - name: Test the browser extension
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        run: |
+          google-chrome --version
+          node --test tests/test_memty_background.cjs tests/test_memty_extension.cjs
 
   build:
     name: Build distributions
@@ -100,7 +109,9 @@ jobs:
   publish:
     name: Publish to PyPI
     # Only a published GitHub release uploads; pull requests and manual runs stop at build.
-    if: github.event_name == 'release'
+    # 0.2.2 was already uploaded manually; publishing its GitHub release must
+    # not attempt to replace the existing PyPI files.
+    if: github.event_name == 'release' && github.event.release.tag_name != 'v0.2.2'
     needs: build
     runs-on: ubuntu-latest
     environment:

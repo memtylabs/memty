@@ -1,0 +1,2 @@
+recursive-include docs *.md *.svg
+recursive-include examples *.md *.py

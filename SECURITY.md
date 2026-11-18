@@ -40,7 +40,7 @@ We aim to acknowledge reports within 3 days and to ship a fix for confirmed issu
 
 ## Verifying a release
 
-Every release from 0.2.1 on is built and published by [GitHub Actions](.github/workflows/publish.yml) using PyPI Trusted Publishing, with no API tokens. Each file carries a provenance attestation that links it to the exact commit and workflow run that built it. You can see this on the **Verified details** panel of the [PyPI page](https://pypi.org/project/memty/), or check it yourself:
+The [release workflow](.github/workflows/publish.yml) supports PyPI Trusted Publishing and provenance attestations. Check the **Verified details** panel of the [PyPI page](https://pypi.org/project/memty/) for each file: version 0.2.1 was uploaded with Twine and has no provenance attestation. For a release that has attestations, you can also check them yourself:
 
 ```shell
 pip download memty --no-deps -d memty-dist

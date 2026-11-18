@@ -2,11 +2,20 @@
 
 All notable changes to the `memty` package. This project follows [Semantic Versioning](https://semver.org/); while it is in 0.x, minor versions may change commands and options.
 
+## 0.2.2 (unreleased)
+
+- Restrict unclassified summaries to local providers and respect provider restrictions when including them. Forgetting a fact also deletes its namespace summary and compacts its search index.
+- Require MCP SDK 1.30 or newer within the 1.x line, incorporating upstream security fixes.
+- Add a confirmed Delete all action for facts in the selected namespace.
+- Fix typing in the browser review panel being redirected to the chat box.
+- Add user guides and runnable Python examples to the repository and source distribution.
+- The project license is now Apache-2.0; version 0.2.1 was published under MIT.
+
 ## 0.2.1 (2026-11-14)
 
 A security release. Upgrade with `pip install --upgrade memty`, then run `memtyd stop` once so the background daemon restarts with the new code.
 
-- **Verified releases.** Releases are now built and published by GitHub Actions through PyPI Trusted Publishing, with provenance attestations linking each file to the commit and workflow that built it. There's no upload token anywhere. Before publishing, the tests run on Linux, Windows and macOS. See `SECURITY.md` for how to verify a release and report a vulnerability.
+- A GitHub Actions workflow was added for testing and publishing with PyPI Trusted Publishing. The actual 0.2.1 files on PyPI were uploaded with Twine and do not have provenance attestations. See `SECURITY.md` for how to verify a release and report a vulnerability.
 - **Fixed on macOS:** the browser bridge could hang for 30+ seconds before listening, because Python's HTTP server did a reverse-DNS lookup of `127.0.0.1`. It now starts immediately.
 - **Fixed on Windows:** `memtyd` and the background bridge kept the folder they were started from locked, so a project folder could not be deleted or renamed while they ran. They now run from the drive root.
 - **Fixed:** facts from one browser Save could be pasted in alphabetical order instead of the order you saved them, when they were written within the same millisecond.
