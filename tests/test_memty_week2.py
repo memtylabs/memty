@@ -176,6 +176,19 @@ with MemtyLedger(sys.argv[1]) as ledger:
         self.assertEqual(json.loads(base64.b64decode(query["config"][0])),
                          {"command": "C:\\Py 3\\python.exe", "args": ["-m", "memty", "mcp"]})
 
+    def test_cursor_existing_conflict_does_not_open_installer(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            _, paths = self._client_home(tmp)
+            paths["Cursor"].parent.mkdir()
+            paths["Cursor"].write_text(json.dumps({"mcpServers": {"memty": {"command": "old"}}}))
+            before = paths["Cursor"].read_bytes()
+            with patch("memty.integrations.mcp.connect._open_url") as opened:
+                result = connect_clients(paths, clients=["Cursor"], executable="new")
+            self.assertEqual(result["clients"]["Cursor"]["status"], "manual_step")
+            self.assertEqual(paths["Cursor"].read_bytes(), before)
+            opened.assert_not_called()
+
     def test_connect_uses_claude_cli_and_reports_existing_entries(self):
         from unittest.mock import patch
         import subprocess
@@ -197,12 +210,9 @@ with MemtyLedger(sys.argv[1]) as ledger:
                 result = connect_clients(paths, claude_cli="claude", executable="/py",
                                          clients=["claude code", "Cursor"])["clients"]
             self.assertEqual(set(result), {"Claude Code", "Cursor"})
-            self.assertEqual(result["Claude Code"]["status"], "updated")
+            self.assertEqual(result["Claude Code"]["status"], "manual_step")
             self.assertEqual(result["Cursor"]["status"], "already_connected")
-            self.assertEqual(calls, [
-                ["claude", "mcp", "remove", "--scope", "user", "memty"],
-                ["claude", "mcp", "add", "--scope", "user", "memty", "--", "/py", "-m", "memty", "mcp"],
-            ])
+            self.assertEqual(calls, [])
 
             calls.clear()
             with patch("memty.integrations.mcp.connect.subprocess.run", side_effect=fake_run):
@@ -211,10 +221,11 @@ with MemtyLedger(sys.argv[1]) as ledger:
                 plan = connect_clients(paths, claude_cli="claude", executable="/new",
                                        clients=["Claude Code"], dry_run=True)
             self.assertEqual(same["Claude Code"]["status"], "already_connected")
-            self.assertEqual(plan["clients"]["Claude Code"]["status"], "would_update")
+            self.assertEqual(plan["clients"]["Claude Code"]["status"], "manual_step")
             self.assertEqual(calls, [])
 
             failing = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom")
+            paths["Claude Code"].write_text('{}', encoding="utf-8")
             with patch("memty.integrations.mcp.connect.subprocess.run", side_effect=failing):
                 broken = connect_clients(paths, claude_cli="claude", executable="/new",
                                          clients=["Claude Code"])["clients"]["Claude Code"]
@@ -238,11 +249,11 @@ with MemtyLedger(sys.argv[1]) as ledger:
             def run(*args):
                 return subprocess.run([sys.executable, "-m", "memty", "connect", *args], env=env,
                                       capture_output=True, text=True, timeout=15)
-            dry = run("--dry-run")
+            dry = run("--dry-run", "--json")
             self.assertEqual(dry.returncode, 0, dry.stderr)
             self.assertEqual(json.loads(dry.stdout)["clients"]["Cursor"]["status"],
                              "would_open_install_prompt")
-            done = run("--no-open")
+            done = run("--no-open", "--json")
             self.assertEqual(done.returncode, 0, done.stderr)
             report = json.loads(done.stdout)["clients"]
             self.assertEqual(report["Cursor"]["status"], "manual_step")
