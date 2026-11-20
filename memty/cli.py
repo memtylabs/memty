@@ -71,6 +71,44 @@ def _print(value) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, default=str))
 
 
+def _print_connect(report: dict) -> None:
+    """Show a compact connection report, including only actionable details."""
+    labels = {
+        "connected": "Connected", "updated": "Updated",
+        "already_connected": "Already connected", "not_detected": "Not detected",
+        "manual_step": "Action needed", "error": "Connection failed",
+        "install_prompt_opened": "Confirm in app", "would_add": "Ready to connect",
+        "would_update": "Ready to update", "would_open_install_prompt": "Ready to open installer",
+    }
+    print("\n  Memty | Connect your assistants")
+    if report["dry_run"]:
+        print("  Preview only - no changes made")
+    print()
+    for name, item in report["clients"].items():
+        status = item["status"]
+        print(f"  {name:<16} {labels.get(status, status)}")
+        if status in {"manual_step", "install_prompt_opened", "error"}:
+            if item.get("steps"):
+                print(f"    {item['steps']}")
+            if item.get("entry"):
+                print("    Add this entry:")
+                print("\n".join("    " + line for line in json.dumps(item["entry"], indent=2).splitlines()))
+            if item.get("link"):
+                print(f"    {item['link']}")
+            if item.get("command") and status == "manual_step":
+                command = item["command"]
+                if isinstance(command, list):
+                    import subprocess
+                    import shlex
+                    import os
+                    command = subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+                print(f"    {command}")
+            if status == "error":
+                print("    Check the client setup and retry. Use --json for error details.")
+    print(f"\n  {report['next_step']}")
+    print("  Client settings are managed by each app.\n")
+
+
 def _ledger(args) -> MemtyLedger:
     trusted = [item.strip() for item in (args.trusted_provider or []) if item.strip()]
     from .runtime.daemon import DaemonLedger
@@ -339,6 +377,7 @@ def main() -> None:
                     "settings files: supported CLIs install the server, Cursor shows its install "
                     "prompt, and Claude Desktop and Windsurf get exact manual steps.")
     connect.add_argument("--dry-run", action="store_true", help="show the plan without running anything")
+    connect.add_argument("--json", action="store_true", help="show the full machine-readable report")
     connect.add_argument("--no-open", action="store_true",
                          help="print the Cursor install link instead of opening it")
     connect.add_argument("--client", action="append", choices=["Claude Desktop", "Claude Code", "Codex CLI", "VS Code", "Cursor", "Windsurf"],
@@ -426,7 +465,10 @@ def main() -> None:
         from .integrations.mcp.connect import connect_clients
         results = connect_clients(dry_run=args.dry_run, clients=args.client,
                                   open_links=not args.no_open)
-        _print(results)
+        if args.json:
+            _print(results)
+        else:
+            _print_connect(results)
         if any(item["status"] == "error" for item in results["clients"].values()):
             raise SystemExit(1)
         return
