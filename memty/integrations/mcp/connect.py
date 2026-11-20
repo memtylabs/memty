@@ -232,18 +232,17 @@ def _connect_claude_code(path: Path, entry: dict, claude_cli: str | None, dry_ru
     current = _current_entry(path)
     if _matches(current, entry):
         return {**result, "status": "already_connected"}
+    if current is not None:
+        return {**result, "status": "manual_step",
+                "steps": "A Memty server already exists in Claude Code. Review it with 'claude mcp get memty' before changing it."}
     if claude_cli is None:
         return {"status": "manual_step", "path": str(path),
                 "steps": "Install the Claude Code CLI, or run this command where it is available.",
                 "command": manual}
-    action = "update" if current is not None else "add"
     if dry_run:
-        return {**result, "status": "would_" + action}
+        return {**result, "status": "would_add"}
     try:
         # Claude Code's own CLI validates and saves its settings; Memty never edits the file.
-        if current is not None:
-            subprocess.run([claude_cli, "mcp", "remove", "--scope", "user", SERVER_NAME],
-                           capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
         proc = subprocess.run([claude_cli, "mcp", "add", "--scope", "user", SERVER_NAME, "--",
                                entry["command"], *entry["args"]],
                               capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
@@ -252,14 +251,18 @@ def _connect_claude_code(path: Path, entry: dict, claude_cli: str | None, dry_ru
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout).strip() or f"claude exited with {proc.returncode}"
         return {**result, "status": "error", "error": detail, "command": manual}
-    return {**result, "status": "updated" if action == "update" else "connected"}
+    return {**result, "status": "connected"}
 
 
 def _connect_cursor(path: Path, entry: dict, dry_run: bool, open_links: bool) -> dict:
     link = cursor_install_link(entry)
     result = {"path": str(path), "method": "cursor install link", "link": link}
-    if _matches(_current_entry(path), entry):
+    current = _current_entry(path)
+    if _matches(current, entry):
         return {"path": str(path), "method": "cursor install link", "status": "already_connected"}
+    if current is not None:
+        return {"path": str(path), "status": "manual_step",
+                "steps": "A Memty server already exists in Cursor. Review it in Cursor's MCP settings before changing it."}
     if dry_run:
         return {**result, "status": "would_open_install_prompt"}
     if not open_links:
@@ -319,10 +322,12 @@ def connect_clients(paths: dict[str, Path] | None = None, *, dry_run: bool = Fal
         next_step = "A client installer reported an error; see its entry above."
     elif dry_run and statuses & {"would_add", "would_update", "would_open_install_prompt"}:
         next_step = "Run memty connect without --dry-run to apply."
-    elif statuses & {"connected", "updated", "install_prompt_opened", "manual_step"}:
-        next_step = "Finish any manual steps above, then restart the connected clients."
+    elif statuses & {"install_prompt_opened", "manual_step"}:
+        next_step = "Finish the steps above, then restart the connected clients."
+    elif statuses & {"connected", "updated"}:
+        next_step = "Connection complete. Restart your connected clients to use Memty."
     elif statuses <= {"not_detected"}:
-        next_step = "No supported client was detected. Add server_entry using your client's MCP settings."
+        next_step = "No supported clients detected. Install or open a supported client, then try again."
     else:
         next_step = "Memty is already connected; no changes were needed."
     return {

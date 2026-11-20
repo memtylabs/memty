@@ -161,12 +161,18 @@ The vault file itself is **not encrypted**, so it relies on your computer accoun
 | `memty extension` | Install or update the browser extension folder |
 | `memty pair` | Connect another browser or a reinstalled extension (two-minute window) |
 | `memty connect` | Connect Claude Desktop, Claude Code, Codex CLI, VS Code, Cursor, and Windsurf through supported installers or guided steps |
+
 | `memty remember` · `recall` · `forget` | Save, compile, or permanently delete facts |
 | `memty list` · `history` · `stats` | Inspect facts, versions, and the vault |
 | `memty clip NS` | Copy a namespace's facts to the clipboard |
 | `memty summary` · `rule` · `rules` | Namespace summaries and logical rules |
 | `memty migrate PATH` | Import from an earlier Memty vault |
 | `memtyd status` · `start` · `stop` | Control the shared background daemon |
+
+`memty connect` summarizes each client's status and shows instructions when you need to act.
+Use `memty connect --dry-run` to preview changes or `memty connect --json` for the full
+machine-readable report. Memty delegates configuration to client installers and leaves
+conflicting existing Memty entries for you to review.
 
 The full reference, Python API, and security model are in the [package README](memty/README.md).
 
