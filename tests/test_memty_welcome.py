@@ -32,14 +32,35 @@ class WelcomeTests(unittest.TestCase):
         version = run("--version")
         self.assertEqual(version.returncode, 0, version.stderr)
         self.assertTrue(version.stdout.startswith("memty "))
-        # --dry-run: this runs against the real home directory and must not edit it.
-        connect = run("connect", "--dry-run")
+        # Isolate client detection from the developer's installed applications.
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, HOME=tmp, USERPROFILE=tmp, PATH=tmp,
+                       APPDATA=tmp, LOCALAPPDATA=tmp, XDG_CONFIG_HOME=tmp)
+            connect = subprocess.run([sys.executable, "-m", "memty", "connect", "--dry-run", "--json"],
+                                     env=env, capture_output=True, text=True, timeout=15)
         self.assertEqual(connect.returncode, 0, connect.stderr)
         report = json.loads(connect.stdout)
         self.assertTrue(report["dry_run"])
         self.assertEqual(report["server_entry"]["memty"]["args"], ["-m", "memty", "mcp"])
         self.assertFalse(any(item["status"] in {"connected", "updated"}
                              for item in report["clients"].values()))
+
+    def test_connect_output_is_concise_and_actionable(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        from memty.cli import _print_connect
+        report = {"dry_run": False, "clients": {
+            "Claude Code": {"status": "already_connected", "path": "private/path"},
+            "Cursor": {"status": "manual_step", "steps": "Confirm in Cursor.", "link": "cursor://install"},
+        }, "next_step": "Finish the steps above."}
+        output = StringIO()
+        with redirect_stdout(output):
+            _print_connect(report)
+        self.assertIn("Claude Code      Already connected", output.getvalue())
+        self.assertIn("Confirm in Cursor.", output.getvalue())
+        self.assertIn("cursor://install", output.getvalue())
+        self.assertNotIn("private/path", output.getvalue())
+        self.assertNotIn('"clients"', output.getvalue())
 
 
 if __name__ == "__main__":
