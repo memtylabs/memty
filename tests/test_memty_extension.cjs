@@ -343,12 +343,17 @@ test('dragging and selected-text review work on a ChatGPT-style page',
     } finally {
       if (client) client.close();
       browser.kill();
-      if (browser.exitCode === null) await Promise.race([new Promise((resolve) => browser.once('exit', resolve)), delay(3000)]);
+      if (browser.exitCode === null) {
+        await Promise.race([new Promise((resolve) => browser.once('exit', resolve)), delay(5000)]);
+        if (browser.exitCode === null) browser.kill('SIGKILL');
+        if (browser.exitCode === null) await Promise.race([new Promise((resolve) => browser.once('exit', resolve)), delay(3000)]);
+      }
+      await delay(250);
       page.closeAllConnections();
       await new Promise((resolve) => page.close(resolve));
       // Only remove the temporary profile created by this test.
       if (path.dirname(path.resolve(profile)) === tempRoot && path.basename(profile).startsWith('memty-chrome-test-')) {
-        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
       }
     }
   });
