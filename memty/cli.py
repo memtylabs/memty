@@ -90,19 +90,10 @@ def _print_connect(report: dict) -> None:
         if status in {"manual_step", "install_prompt_opened", "error"}:
             if item.get("steps"):
                 print(f"    {item['steps']}")
-            if item.get("entry"):
-                print("    Add this entry:")
-                print("\n".join("    " + line for line in json.dumps(item["entry"], indent=2).splitlines()))
-            if item.get("link"):
+            if item.get("link") and status == "manual_step":
                 print(f"    {item['link']}")
-            if item.get("command") and status == "manual_step":
-                command = item["command"]
-                if isinstance(command, list):
-                    import subprocess
-                    import shlex
-                    import os
-                    command = subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
-                print(f"    {command}")
+            if status == "manual_step" and (item.get("entry") or item.get("command")):
+                print("    Run memty connect --dry-run --json for the setup details.")
             if status == "error":
                 print("    Check the client setup and retry. Use --json for error details.")
     print(f"\n  {report['next_step']}")
