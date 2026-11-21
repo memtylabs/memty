@@ -648,12 +648,15 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     record = self.server.ledger.record(
                         namespace, slot, value, confidence=0.7, verification_state="EXTRACTED",
                         sensitivity=existing.get(_normalize_slot(slot), "PUBLIC"), source_id=batch)
-                saved.append({"slot": record["slot"], "version": record.get("version")})
+                saved.append({"slot": record["slot"], "version": record.get("version"),
+                              "sensitivity": record.get("sensitivity", "PUBLIC")})
             except (LockedSlot, TombstonedSlot) as error:
                 skipped.append({"slot": slot, "reason": type(error).__name__, "message": str(error)})
             except ValueError as error:
                 skipped.append({"slot": slot, "reason": "invalid", "message": str(error)})
-        self._send(HTTPStatus.OK, {"namespace": namespace, "saved": saved, "skipped": skipped})
+        secret_count = sum(1 for s in saved if s.get("sensitivity") == "SECRET")
+        self._send(HTTPStatus.OK, {"namespace": namespace, "saved": saved, "skipped": skipped,
+                                   "secrets": secret_count})
 
 
 # ---------------------------------------------------------------------------

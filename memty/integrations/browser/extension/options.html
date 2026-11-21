@@ -29,6 +29,10 @@
             padding: 10px 0; border-top: 1px solid var(--line); }
     .fact textarea { width: 100%; resize: vertical; min-height: 38px; }
     .fact .title { font-weight: 600; width: 100%; }
+    .fact .title-wrap { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge.secret { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .fact.secret { background: #fff5f5; border-radius: 8px; padding: 10px; margin: 4px 0; border: 1px solid #fee2e2; }
     .fact .meta { grid-column: 1 / -1; display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-top: -2px; }
     .fact .actions { display: flex; gap: 6px; align-items: center; }
     .fact.new { background: #f9fafb; border-radius: 10px; padding: 10px; border: 1px dashed #c7d2fe; }
