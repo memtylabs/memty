@@ -173,6 +173,8 @@ The vault file itself is **not encrypted**, so it relies on your computer accoun
 Use `memty connect --dry-run` to preview changes or `memty connect --json` for the full
 machine-readable report. Memty delegates configuration to client installers and leaves
 conflicting existing Memty entries for you to review.
+Use `memtyd status --json`, `memtyd start --json`, or `memtyd stop --json` when a
+script needs the full daemon result, including the vault path.
 
 The full reference, Python API, and security model are in the [package README](memty/README.md).
 

@@ -18,6 +18,37 @@ from memty.runtime.daemon import status, stop
 from memty.integrations.browser.bridge import health, stop_background, token_path
 
 
+class DaemonOutputTests(unittest.TestCase):
+    def test_control_messages_and_json(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+        from memty.runtime import daemon
+
+        running = {"running": True, "db": "private/path", "pid": 123}
+        cases = [
+            ("start", running, {}, "Started."),
+            ("start", running, {"already_running": True}, "Already running."),
+            ("status", running, {}, "Running."),
+            ("status", {"running": False}, {}, "Not running."),
+            ("stop", {"stopped": True}, {}, "Stopped."),
+            ("stop", {"stopped": False, "reason": "not_running"}, {}, "Already stopped."),
+            ("stop", {"stopped": False}, {}, "has not stopped yet"),
+        ]
+        for action, result, options, expected in cases:
+            with self.subTest(action=action, result=result, options=options):
+                output = StringIO()
+                with redirect_stdout(output):
+                    daemon._print_result(action, result, **options)
+                self.assertIn(expected, output.getvalue())
+                self.assertNotIn("private/path", output.getvalue())
+        output = StringIO()
+        with patch.object(sys, "argv", ["memtyd", "status", "--json"]), \
+                patch.object(daemon, "status", return_value=running), redirect_stdout(output):
+            daemon.main()
+        self.assertEqual(json.loads(output.getvalue()), running)
+
+
 class DaemonCommandTests(unittest.TestCase):
     def test_one_command_shares_browser_saves_with_mcp(self):
         with tempfile.TemporaryDirectory() as tmp:
