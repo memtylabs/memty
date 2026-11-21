@@ -67,19 +67,35 @@ async function loadFacts() {
 }
 
 function row(fact) {
+  const isSecret = fact?.sensitivity === "SECRET";
   const el = document.createElement("div");
-  el.className = fact ? "fact" : "fact new";
+  el.className = fact ? (isSecret ? "fact secret" : "fact") : "fact new";
+  const titleWrap = document.createElement("div");
+  titleWrap.className = "title-wrap";
   const title = Object.assign(document.createElement("input"), {
     className: "title", value: fact ? label(fact.slot) : "", placeholder: "Title, e.g. Main language" });
+  titleWrap.append(title);
+  if (isSecret) {
+    const badge = document.createElement("span");
+    badge.className = "badge secret";
+    badge.textContent = "Secret";
+    badge.title = "Stays on this computer · Context cannot be sent to web chats";
+    titleWrap.append(badge);
+  }
   const value = Object.assign(document.createElement("textarea"), {
-    value: fact?.value ?? "", rows: 1,
-    placeholder: fact?.private ? "Private: hidden here. Type a new value to replace it." : "Value, e.g. Python 3.12" });
+    value: isSecret ? "" : (fact?.value ?? ""), rows: 1,
+    placeholder: isSecret
+      ? "Secret: hidden on this computer. Type a new value to replace it."
+      : (fact?.private ? "Private: hidden here. Type a new value to replace it." : "Value, e.g. Python 3.12") });
   const actions = document.createElement("div");
   actions.className = "actions";
-  const privateBox = Object.assign(document.createElement("input"), { type: "checkbox", checked: !!fact?.private });
+  const privateBox = Object.assign(document.createElement("input"), {
+    type: "checkbox", checked: isSecret || !!fact?.private, disabled: isSecret });
   const privateLabel = document.createElement("label");
   privateLabel.className = "private";
-  privateLabel.title = "Private facts are shown to chat AIs only as [private]";
+  privateLabel.title = isSecret
+    ? "Secret facts always stay on this computer and cannot be sent to web chats"
+    : "Private facts are shown to chat AIs only as [private]";
   privateLabel.append(privateBox, "Private");
   const save = Object.assign(document.createElement("button"), { className: "primary", textContent: fact ? "Save" : "Add", disabled: !!fact });
   actions.append(privateLabel, save);
@@ -88,18 +104,19 @@ function row(fact) {
     del = Object.assign(document.createElement("button"), { className: "danger", textContent: "Delete" });
     actions.append(del);
   }
-  el.append(title, value, actions);
+  el.append(titleWrap, value, actions);
   if (fact) {
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = `${fact.source === "you" ? "Added or confirmed by you" : "Saved from a chat"} · ${ago(fact.updated_at)}`;
+    const secretPrefix = isSecret ? "🔒 Secret (stays on this computer) · " : "";
+    meta.textContent = `${secretPrefix}${fact.source === "you" ? "Added or confirmed by you" : "Saved from a chat"} · ${ago(fact.updated_at)}`;
     el.append(meta);
   }
 
   const dirty = () => {
     if (!fact) return;
-    save.disabled = title.value.trim() === label(fact.slot) && value.value === (fact.value ?? "")
-      && privateBox.checked === fact.private;
+    save.disabled = title.value.trim() === label(fact.slot) && value.value === (isSecret ? "" : (fact.value ?? ""))
+      && privateBox.checked === (isSecret || fact.private);
   };
   [title, value].forEach((input) => input.addEventListener("input", dirty));
   privateBox.addEventListener("change", dirty);
@@ -138,7 +155,7 @@ function row(fact) {
 function render() {
   $("deleteAll").disabled = !facts.length;
   const query = $("search").value.trim().toLowerCase();
-  const shown = facts.filter((f) => !query || `${label(f.slot)} ${f.value ?? ""}`.toLowerCase().includes(query));
+  const shown = facts.filter((f) => !query || `${label(f.slot)} ${f.sensitivity === "SECRET" ? "secret" : (f.value ?? "")}`.toLowerCase().includes(query));
   $("list").replaceChildren(...shown.map(row));
   if (!shown.length) {
     $("list").append(Object.assign(document.createElement("div"), {

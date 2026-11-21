@@ -573,6 +573,7 @@ class MemtyLedger:
                 allowed = policy.get("allowed")
                 if allowed is not None and not allowed:
                     allowed = {"__memty_no_provider__"}
+                sensitivity = "SECRET" if looks_like_credential(value, slot) else policy.get("sensitivity", "PUBLIC")
                 try:
                     db.execute("""
                         INSERT INTO atomic_facts(
@@ -581,15 +582,16 @@ class MemtyLedger:
                             blocked_providers,ephemeral_redaction,created_at,updated_at
                         ) VALUES(?,?,?,?,?,1.0,'USER_CONFIRMED',?,?,1,0,?,?,?,?,?)
                     """, ("mem_" + uuid.uuid4().hex, self.user_id, namespace, actual_slot, value,
-                          "SECRET" if looks_like_credential(value, slot) else policy.get("sensitivity", "PUBLIC"), batch,
+                          sensitivity, batch,
                           json.dumps(sorted(allowed)) if allowed is not None else "[]",
                           json.dumps(sorted(policy.get("blocked", ()))),
                           int(policy.get("ephemeral", False)), now, now))
                 except sqlite3.IntegrityError as error:
                     raise ValueError("could not create a distinct context; please retry") from error
-                saved.append({"slot": actual_slot, "version": 1})
+                saved.append({"slot": actual_slot, "version": 1, "sensitivity": sensitivity})
             db.execute("COMMIT")
-        return {"namespace": namespace, "context_id": batch, "saved": saved, "skipped": []}
+        secret_count = sum(1 for item in saved if item.get("sensitivity") == "SECRET")
+        return {"namespace": namespace, "context_id": batch, "saved": saved, "skipped": [], "secrets": secret_count}
 
     def get(self, memory_id: str, *, include_embedding: bool = False) -> dict[str, Any] | None:
         with self._connect() as db:

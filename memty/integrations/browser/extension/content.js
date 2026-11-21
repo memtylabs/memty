@@ -96,6 +96,15 @@
                        color:#111827; background:#f9fafb; }
       .fact textarea:focus { outline:2px solid #a5b4fc; background:#fff; }
       .fact.off textarea { opacity:.45; }
+      .fact-header { grid-column:2; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+      .secret-badge { display:inline-flex; align-items:center; padding:2px 7px;
+                      border-radius:999px; background:#fee2e2; color:#991b1b;
+                      border:1px solid #fecaca; font:600 11px/1.2 system-ui,sans-serif; }
+      .secret-note { grid-column:2; font-size:11px; line-height:1.35; color:#991b1b;
+                     margin-top:-2px; margin-bottom:2px; }
+      .fact.secret { background:rgba(254,242,242,.4); padding:8px 6px; border-radius:8px; margin:2px 0; }
+      .fact.secret.off { background:transparent; }
+      .fact.secret.off .secret-note { color:#6b7280; }
       .row { display:flex; gap:8px; justify-content:flex-end; padding:10px 14px 12px; }
       .row button { padding:8px 14px; border-radius:8px; color:#374151; background:#f3f4f6; }
       .row button.primary { color:#fff; background:#4f46e5; }
@@ -480,19 +489,51 @@
     const rows = facts.map((fact) => {
       const row = document.createElement("div");
       row.className = "fact";
-      const box = Object.assign(document.createElement("input"), { type: "checkbox", checked: true });
+      const isSecret = fact.sensitivity === "SECRET";
+      if (isSecret) row.classList.add("secret");
+      const box = Object.assign(document.createElement("input"), {
+        type: "checkbox",
+        checked: !isSecret
+      });
+      if (!box.checked) row.classList.add("off");
+
+      const headerCol = document.createElement("div");
+      headerCol.className = "fact-header";
+
       const name = Object.assign(document.createElement("input"), {
         className: "label", value: label(fact.slot), title: "Title (editable)", spellcheck: false });
+      headerCol.append(name);
+
+      if (isSecret) {
+        const badge = document.createElement("span");
+        badge.className = "secret-badge";
+        badge.textContent = "Looks like a secret";
+        headerCol.append(badge);
+      }
+
       const value = Object.assign(document.createElement("textarea"), { value: fact.value, rows: 1 });
+
       box.onchange = () => row.classList.toggle("off", !box.checked);
-      row.append(box, name, value);
+      row.append(box, headerCol);
+
+      if (isSecret) {
+        const secretNote = document.createElement("div");
+        secretNote.className = "secret-note";
+        secretNote.textContent = "Kept on this computer · its context can't be added to chats (check is repeated on save)";
+        row.append(secretNote);
+      }
+
+      row.append(value);
       list.append(row);
-      return { box, name, value, fact };
+      return { box, name, value, fact, isSecret };
     });
     const actions = document.createElement("div");
     actions.className = "row";
     const cancel = Object.assign(document.createElement("button"), { textContent: "Cancel" });
-    const save = Object.assign(document.createElement("button"), { textContent: `Save ${rows.length}`, className: "primary" });
+    const save = Object.assign(document.createElement("button"), {
+      textContent: `Save ${rows.filter((r) => r.box.checked).length}`,
+      className: "primary"
+    });
     function recount() { save.textContent = `Save ${rows.filter((r) => r.box.checked).length}`; }
     rows.forEach((r) => r.box.addEventListener("change", recount));
     actions.append(cancel, save);
@@ -526,8 +567,10 @@
       try {
         const result = await ask({ type: "save", namespace: projectName, facts: chosen });
         card.hidden = true;
-        const skipped = result.skipped.length ? ` (${result.skipped.length} skipped: ${result.skipped[0].message})` : "";
-        toast(`Saved ${result.saved.length} fact(s) to ${result.namespace}${skipped}.`);
+        const secretCount = result.secrets ?? result.saved?.filter((s) => s.sensitivity === "SECRET").length ?? 0;
+        const secretNote = secretCount > 0 ? ` (${secretCount} stored as secret)` : "";
+        const skipped = result.skipped?.length ? ` (${result.skipped.length} skipped: ${result.skipped[0].message})` : "";
+        toast(`Saved ${result.saved.length} fact(s) to ${result.namespace}${secretNote}${skipped}.`);
       } catch (error) {
         toast(error.message, 6000);
       }

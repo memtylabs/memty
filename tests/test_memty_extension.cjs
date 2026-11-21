@@ -95,7 +95,7 @@ test('dragging and selected-text review work on a ChatGPT-style page',
       const send = client.send.bind(client);
       const evaluate = async (expression) => {
         const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-        if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
+        if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
         return result.result.value;
       };
       await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 800, deviceScaleFactor: 1, mobile: false });
@@ -118,9 +118,9 @@ test('dragging and selected-text review work on a ChatGPT-style page',
         window.__memtyMessages = [];
         window.chrome = { runtime: { id: 'test', sendMessage: (message, cb) => {
           window.__memtyMessages.push(message);
-          if (message.type === 'extract') return cb({ ok: true, result: {
+          if (message.type === 'extract') return cb({ ok: true, result: window.__extractResult || {
             facts: [{slot: 'decision', value: 'Keep the cache local.'}], warnings: ['Review the split parts together.'] } });
-          if (message.type === 'save') return cb({ ok: true, result: {
+          if (message.type === 'save') return cb({ ok: true, result: window.__saveResult ? window.__saveResult(message) : {
             namespace: 'project.api', saved: [{slot: 'decision'}], skipped: [] } });
           if (message.type === 'namespace-options') return cb({ok:true, result:{namespace:'repo.memty',
             namespaces:['personal', 'repo.memty'], detected:true}});
@@ -333,13 +333,133 @@ test('dragging and selected-text review work on a ChatGPT-style page',
       assert.deepEqual(saved.facts, [{ slot: 'cache_policy', value: 'Keep the cache local. Always' }]);
       assert.equal(saved.namespace, 'project.api');
 
+      // Secret facts: flagged with sensitivity: 'SECRET', badge rendered, defaulted to unticked,
+      // and can be skipped or saved with secret count in toast.
+      await evaluate(`(() => {
+        window.__extractResult = {
+          facts: [
+            { slot: 'decision', value: 'Keep the cache local.' },
+            { slot: 'api_token', value: 'sk-ant-api03-abcdef123456', sensitivity: 'SECRET' }
+          ]
+        };
+        const range = document.createRange();
+        range.selectNodeContents(document.querySelector('#answer p'));
+        const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      })()`);
+      await until(() => evaluate(`!document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.bubble').hidden`),
+        Boolean, 'save selection bubble for secret test');
+      const secretBubble = await evaluate(`(() => { const r = document.querySelector('[data-memty-bridge]').shadowRoot
+        .querySelector('.bubble').getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()`);
+      await mouse('mouseMoved', secretBubble.x, secretBubble.y);
+      await mouse('mousePressed', secretBubble.x, secretBubble.y, { button: 'left', buttons: 1, clickCount: 1 });
+      await mouse('mouseReleased', secretBubble.x, secretBubble.y, { button: 'left', buttons: 0, clickCount: 1 });
+      await until(() => evaluate(`!document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.card').hidden`),
+        Boolean, 'fact review with secret');
+
+      const reviewInfo = await evaluate(`(() => {
+        const root = document.querySelector('[data-memty-bridge]').shadowRoot;
+        const factRows = root.querySelectorAll('.fact');
+        const saveBtn = root.querySelector('.card .primary');
+        return {
+          rowCount: factRows.length,
+          saveText: saveBtn.textContent,
+          hasBadge: !!root.querySelector('.secret-badge'),
+          badgeText: root.querySelector('.secret-badge')?.textContent,
+          noteText: root.querySelector('.secret-note')?.textContent,
+          checked: Array.from(factRows, (f) => f.querySelector('input[type=checkbox]').checked),
+          isSecretClass: Array.from(factRows, (f) => f.classList.contains('secret')),
+          isOffClass: Array.from(factRows, (f) => f.classList.contains('off')),
+        };
+      })()`);
+      assert.equal(reviewInfo.rowCount, 2);
+      assert.equal(reviewInfo.hasBadge, true);
+      assert.match(reviewInfo.badgeText, /Looks like a secret/);
+      assert.match(reviewInfo.noteText, /Kept on this computer/);
+      assert.deepEqual(reviewInfo.checked, [true, false]);
+      assert.deepEqual(reviewInfo.isSecretClass, [false, true]);
+      assert.deepEqual(reviewInfo.isOffClass, [false, true]);
+      assert.equal(reviewInfo.saveText, 'Save 1');
+
+      // Skip path: saving while secret is unticked leaves it out
+      const saveCountBefore = await evaluate(`window.__memtyMessages.filter((m) => m.type === 'save').length`);
+      await evaluate(`document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.card .primary').click()`);
+      const skippedSaveMsg = await until(() => evaluate(`window.__memtyMessages.filter((m) => m.type === 'save')[${saveCountBefore}]`),
+        Boolean, 'skip secret save');
+      assert.deepEqual(skippedSaveMsg.facts, [{ slot: 'decision', value: 'Keep the cache local.' }]);
+
+      // Save path: opening again, ticking the secret fact, and saving it
+      await evaluate(`(() => {
+        const range = document.createRange();
+        range.selectNodeContents(document.querySelector('#answer p'));
+        const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      })()`);
+      await until(() => evaluate(`!document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.bubble').hidden`),
+        Boolean, 'save selection bubble for secret save test');
+      const secretBubble2 = await evaluate(`(() => { const r = document.querySelector('[data-memty-bridge]').shadowRoot
+        .querySelector('.bubble').getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()`);
+      await mouse('mouseMoved', secretBubble2.x, secretBubble2.y);
+      await mouse('mousePressed', secretBubble2.x, secretBubble2.y, { button: 'left', buttons: 1, clickCount: 1 });
+      await mouse('mouseReleased', secretBubble2.x, secretBubble2.y, { button: 'left', buttons: 0, clickCount: 1 });
+      await until(() => evaluate(`!document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.card').hidden`),
+        Boolean, 'fact review for secret save');
+
+      // Tick the secret fact checkbox
+      await evaluate(`(() => {
+        const root = document.querySelector('[data-memty-bridge]').shadowRoot;
+        const secretCheckbox = root.querySelectorAll('.fact')[1].querySelector('input[type=checkbox]');
+        secretCheckbox.click();
+      })()`);
+      const afterTick = await evaluate(`(() => {
+        const root = document.querySelector('[data-memty-bridge]').shadowRoot;
+        const factRows = root.querySelectorAll('.fact');
+        return {
+          saveText: root.querySelector('.card .primary').textContent,
+          checked: Array.from(factRows, (f) => f.querySelector('input[type=checkbox]').checked),
+          isOffClass: Array.from(factRows, (f) => f.classList.contains('off')),
+        };
+      })()`);
+      assert.equal(afterTick.saveText, 'Save 2');
+      assert.deepEqual(afterTick.checked, [true, true]);
+      assert.deepEqual(afterTick.isOffClass, [false, false]);
+
+      // Mock save response returning sensitivity for the secret fact
+      await evaluate(`
+        window.__saveResult = (msg) => ({
+          namespace: 'project.api',
+          saved: [
+            { slot: 'decision', version: 1 },
+            { slot: 'api_token', version: 1, sensitivity: 'SECRET' }
+          ],
+          skipped: [],
+          secrets: 1
+        });
+      `);
+      const saveCountBefore2 = await evaluate(`window.__memtyMessages.filter((m) => m.type === 'save').length`);
+      await evaluate(`document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.card .primary').click()`);
+      const savedSecretMsg = await until(() => evaluate(`window.__memtyMessages.filter((m) => m.type === 'save')[${saveCountBefore2}]`),
+        Boolean, 'save with secret included');
+      assert.equal(savedSecretMsg.facts.length, 2);
+      assert.equal(savedSecretMsg.facts[1].slot, 'api_token');
+      await until(() => evaluate(`document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.toast').textContent`),
+        (t) => t.includes('stored as secret'), 'toast stating secret stored');
+      const toastText = await evaluate(`document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.toast').textContent`);
+      assert.match(toastText, /Saved 2 fact\(s\) to project\.api \(1 stored as secret\)\./);
+
+      await evaluate(`
+        delete window.__extractResult;
+        delete window.__saveResult;
+      `);
+
+      const extractCountBefore = await evaluate(`window.__memtyMessages.filter((m) => m.type === 'extract').length`);
       await evaluate(`(() => { const answer = document.querySelector('#answer'); answer.textContent = 'word '.repeat(10001);
         const range = document.createRange(); range.selectNodeContents(answer);
         const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
         document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.save').click(); })()`);
       await until(() => evaluate(`document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.toast').textContent`),
         (text) => text.includes('too long'), 'oversized selection warning');
-      assert.equal(await evaluate(`window.__memtyMessages.filter((m) => m.type === 'extract').length`), 1);
+      assert.equal(await evaluate(`window.__memtyMessages.filter((m) => m.type === 'extract').length`), extractCountBefore);
     } finally {
       if (client) client.close();
       browser.kill();
