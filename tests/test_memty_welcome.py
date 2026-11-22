@@ -62,6 +62,23 @@ class WelcomeTests(unittest.TestCase):
         self.assertNotIn("private/path", output.getvalue())
         self.assertNotIn('"clients"', output.getvalue())
 
+    def test_connect_manual_setup_keeps_paths_in_json(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        from memty.cli import _print_connect
+        report = {"dry_run": False, "clients": {
+            "Claude Desktop": {"status": "manual_step", "steps": "Add the entry in settings.",
+                               "entry": {"memty": {"command": "private/path/python"}}},
+            "Claude Code": {"status": "manual_step", "steps": "Install the CLI.",
+                            "command": "private/path/python"},
+        }, "next_step": "Finish the steps above."}
+        output = StringIO()
+        with redirect_stdout(output):
+            _print_connect(report)
+        self.assertNotIn("private/path", output.getvalue())
+        self.assertIn("memty connect --dry-run --json", output.getvalue())
+        self.assertIn("Add the entry in settings.", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

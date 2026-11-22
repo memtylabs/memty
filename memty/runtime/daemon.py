@@ -254,12 +254,33 @@ def stop(db):
     return {"stopped": False}
 
 
+def _print_result(action, result, *, as_json=False, already_running=False):
+    """Render daemon control results without exposing local paths by default."""
+    if as_json:
+        print(json.dumps(result, indent=2))
+        return
+    if action == "start":
+        message = "Already running." if already_running else "Started."
+        if not result.get("running"):
+            message = "Could not confirm that the daemon is running."
+    elif action == "status":
+        message = "Running." if result.get("running") else "Not running."
+    elif result.get("stopped"):
+        message = "Stopped."
+    elif result.get("reason") == "not_running":
+        message = "Already stopped."
+    else:
+        message = "Shutdown requested, but the daemon has not stopped yet."
+    print(f"\n  Memty | Background service\n\n  {message}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="memtyd")
     parser.add_argument("action", nargs="?", default="bridge", choices=["bridge", "start", "serve", "status", "stop"])
     parser.add_argument("--db", default=str(default_vault_path()))
     parser.add_argument("--user", default=default_user_id())
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--json", action="store_true", help="show the full machine-readable result")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
@@ -273,12 +294,13 @@ def main():
         if not serve(args.db):
             raise SystemExit("memtyd is already running for this database")
     elif args.action == "start":
+        already_running = status(args.db)["running"]
         ensure_daemon(args.db)
-        print(json.dumps(status(args.db), indent=2))
+        _print_result("start", status(args.db), as_json=args.json, already_running=already_running)
     elif args.action == "status":
-        print(json.dumps(status(args.db), indent=2))
+        _print_result("status", status(args.db), as_json=args.json)
     else:
-        print(json.dumps(stop(args.db), indent=2))
+        _print_result("stop", stop(args.db), as_json=args.json)
 
 
 if __name__ == "__main__":
