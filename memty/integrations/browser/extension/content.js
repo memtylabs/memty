@@ -63,6 +63,7 @@
       .bubble { position:fixed; padding:7px 12px; border-radius:999px; background:#4f46e5; color:#fff;
                 font:600 12px/1 system-ui,sans-serif; box-shadow:0 4px 14px rgba(0,0,0,.3);
                 border:1px solid rgba(255,255,255,.55); }
+      .bubble:hover, .bubble:focus-visible { background:#3730a3; color:#fff; }
       .card { position:fixed; right:16px; bottom:16px; width:380px; max-width:calc(100vw - 32px);
               max-height:min(460px, calc(100vh - 32px)); display:flex; flex-direction:column;
               background:#fff; color:#111827; border:1px solid #c7d2fe; border-radius:14px;
@@ -555,8 +556,11 @@
     });
   }
 
+  let savedSelection = "";
+  let pressingSave = false;
   function saveFacts() {
-    const selected = selectionText();
+    const selected = selectionText() || savedSelection;
+    savedSelection = "";
     if (selected) return extractFrom(selected, "your selection", saveBtn);
     const answer = latestAnswer();
     if (!answer) return toast("Select the text you want to remember, then click ＋ Save.");
@@ -576,6 +580,7 @@
         bubble.hidden = true;
         return;
       }
+      savedSelection = selectionText();
       const rect = selection.getRangeAt(0).getBoundingClientRect();
       if (!rect.width && !rect.height) { bubble.hidden = true; return; }
       bubble.hidden = false;
@@ -586,6 +591,13 @@
   }
 
   // ---------------------------------------------------------------- wiring
+  // Some chat pages clear the browser selection as a toolbar is clicked.
+  // Capture it before that happens, and discard it when the user clicks elsewhere.
+  document.addEventListener("pointerdown", (event) => {
+    pressingSave = event.composedPath().includes(saveBtn) || event.composedPath().includes(bubble);
+    if (pressingSave) savedSelection = selectionText() || savedSelection;
+    else savedSelection = "";
+  }, { capture: true, signal });
   // Keep focus and the text selection when our buttons are pressed.
   root.addEventListener("mousedown", (event) => {
     if (!event.composedPath().some((node) => node === card)) event.preventDefault();
@@ -594,15 +606,21 @@
   saveBtn.addEventListener("click", saveFacts);
   $(".facts").addEventListener("click", () => ask({ type: "open-facts" }).catch((error) => toast(error.message)));
   bubble.addEventListener("click", () => {
-    const selected = selectionText();
+    const selected = selectionText() || savedSelection;
+    savedSelection = "";
     bubble.hidden = true;
     if (selected) extractFrom(selected, "your selection", saveBtn);
+    else toast("Select the text you want to remember, then click ＋ Save.");
   });
   document.addEventListener("mouseup", updateBubble, { capture: true, signal });
   document.addEventListener("keyup", (event) => { if (event.shiftKey) updateBubble(); }, { capture: true, signal });
   document.addEventListener("selectionchange", () => {
-    if (!bubble.hidden && window.getSelection()?.isCollapsed) bubble.hidden = true;
+    const selected = selectionText();
+    if (selected) savedSelection = selected;
+    else if (!pressingSave) savedSelection = "";
+    if (!bubble.hidden && window.getSelection()?.isCollapsed && !pressingSave) bubble.hidden = true;
   }, { signal });
+  document.addEventListener("pointerup", () => { pressingSave = false; }, { capture: true, signal });
   function closeCard() {
     pickerRevision += 1;
     card.hidden = true;
