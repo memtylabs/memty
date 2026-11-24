@@ -290,6 +290,10 @@ test('dragging and selected-text review work on a ChatGPT-style page',
       const bubble = await evaluate(`(() => { const r = document.querySelector('[data-memty-bridge]').shadowRoot
         .querySelector('.bubble').getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()`);
       await mouse('mouseMoved', bubble.x, bubble.y);
+      assert.equal(await evaluate(`getComputedStyle(document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.bubble')).backgroundColor`),
+        'rgb(55, 48, 163)', 'the save bubble remains opaque on hover');
+      // A chat page may clear its selection while handling the toolbar click.
+      await evaluate(`window.addEventListener('mousedown', () => getSelection().removeAllRanges(), {capture:true, once:true})`);
       await mouse('mousePressed', bubble.x, bubble.y, { button: 'left', buttons: 1, clickCount: 1 });
       await mouse('mouseReleased', bubble.x, bubble.y, { button: 'left', buttons: 0, clickCount: 1 });
       await until(() => evaluate(`!document.querySelector('[data-memty-bridge]').shadowRoot.querySelector('.card').hidden`),
