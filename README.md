@@ -10,7 +10,7 @@
 One private, local memory vault for every AI assistant you use: ChatGPT, Claude, Gemini, Perplexity, Cursor, and any MCP client.
 
 [![PyPI](https://img.shields.io/pypi/v/memty.svg)](https://pypi.org/project/memty/)
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/memty?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/memty)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/memty?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLUE&right_color=ORANGE&left_text=downloads)](https://pepy.tech/projects/memty)
 [![Python](https://img.shields.io/pypi/pyversions/memty.svg)](https://pypi.org/project/memty/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
