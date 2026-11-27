@@ -109,9 +109,9 @@ jobs:
   publish:
     name: Publish to PyPI
     # Only a published GitHub release uploads; pull requests and manual runs stop at build.
-    # 0.2.2 was already uploaded manually; publishing its GitHub release must
+    # 0.2.2 and 0.2.3 were already uploaded manually; publishing their GitHub releases must
     # not attempt to replace the existing PyPI files.
-    if: github.event_name == 'release' && github.event.release.tag_name != 'v0.2.2'
+    if: github.event_name == 'release' && github.event.release.tag_name != 'v0.2.2' && github.event.release.tag_name != 'v0.2.3'
     needs: build
     runs-on: ubuntu-latest
     environment:
